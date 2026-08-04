@@ -40,16 +40,16 @@ class GridMapRenderer:
 
     def _tile_color(self, value, is_valid):
         if not is_valid:
-            return (25, 25, 120)
+            return (15, 15, 80)
         if self.values is None or not np.isfinite(value):
-            return (70, 120, 200)
+            return (60, 100, 180)
         span = self._vmax - self._vmin
         t = 0.0 if span == 0 else (value - self._vmin) / span
-        return (
-            int(30 + t * 205),
-            int(30 + (1 - t) * 205),
-            40,
-        )
+        t = max(0.0, min(1.0, t))
+        hue = 240.0 * (1.0 - t)
+        c = pygame.Color(0)
+        c.hsva = (hue, 100, 100, 100)
+        return tuple(c)[:3]
 
     def render(self, obs):
         """Redraw the grid with the agent located at cell index ``obs``."""
@@ -69,10 +69,7 @@ class GridMapRenderer:
                 is_valid = ch is None or ch != "H"
                 value = self.values[r, c] if self.values is not None else None
 
-                if ch in ("H", "G"):
-                    color = (30, 130, 30) if ch == "G" else (25, 25, 120)
-                else:
-                    color = self._tile_color(value, is_valid)
+                color = self._tile_color(value, is_valid)
                 pygame.draw.rect(self.screen, color, rect)
                 pygame.draw.rect(self.screen, (50, 50, 50), rect, 2)
 

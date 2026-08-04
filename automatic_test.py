@@ -1,7 +1,11 @@
+import time
+
 import gymnasium as gym
 from bettermdptools.algorithms.planner import Planner
 
 from map_renderer import GridMapRenderer
+
+DELAY_S = 0.3
 
 env = gym.make("FrozenLake-v1", is_slippery=False)
 
@@ -15,6 +19,7 @@ renderer.render(obs)
 terminated = truncated = False
 
 while not (terminated or truncated):
+    time.sleep(DELAY_S)
     action = env.action_space.sample()
     obs, reward, terminated, truncated, info = env.step(action)
     renderer.render(obs)
