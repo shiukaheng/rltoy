@@ -12,7 +12,6 @@ from map_renderer import GridMapRenderer
 class Config:
     n_episodes: int = 500
     gamma: float = 0.99
-    trace_decay: float = 0.8
     alpha_init: float = 0.5
     alpha_min: float = 0.01
     alpha_decay_ratio: float = 0.5
@@ -45,7 +44,7 @@ def main(config: Config) -> None:
     n_states = env.observation_space.n
     n_actions = env.action_space.n
 
-    renderer = GridMapRenderer(env.unwrapped, caption="FrozenLake SARSA(lambda) (training)")
+    renderer = GridMapRenderer(env.unwrapped, caption="FrozenLake Q-learning (training)")
     Q = np.zeros((n_states, n_actions), dtype=np.float32)
     alphas = decay_schedule(
         config.alpha_init,
@@ -69,37 +68,27 @@ def main(config: Config) -> None:
 
     try:
         for episode in range(config.n_episodes):
-            traces = np.zeros_like(Q)
             state, _ = env.reset(seed=config.seed if episode == 0 else None)
             terminated, truncated = False, False
-            action = select_action(state, epsilons[episode])
 
             while not (terminated or truncated):
+                action = select_action(state, epsilons[episode])
                 next_state, reward, terminated, truncated, _ = env.step(action)
                 done = terminated or truncated
-                next_action = select_action(next_state, epsilons[episode])
-
-                td_error = (
-                    reward
-                    + config.gamma * Q[next_state, next_action] * (not done)
-                    - Q[state, action]
-                )
-                traces[state, action] += 1
-                Q += alphas[episode] * td_error * traces
-                traces *= config.gamma * config.trace_decay
-                state, action = next_state, next_action
+                td_target = reward + config.gamma * np.max(Q[next_state]) * (not done)
+                Q[state, action] += alphas[episode] * (td_target - Q[state, action])
+                state = next_state
 
                 renderer.set_values(np.max(Q, axis=1))
                 renderer.render(state)
                 pygame.display.set_caption(
-                    f"FrozenLake SARSA(lambda={config.trace_decay}) - "
-                    f"ep {episode + 1}/{config.n_episodes}"
+                    f"FrozenLake Q-learning - ep {episode + 1}/{config.n_episodes}"
                 )
                 pygame.time.wait(int(config.step_delay * 1000))
 
             pygame.time.wait(int(config.episode_delay * 1000))
 
-        pygame.display.set_caption("FrozenLake SARSA(lambda) (evaluation)")
+        pygame.display.set_caption("FrozenLake Q-learning (evaluation)")
         obs, _ = env.reset()
         renderer.set_values(np.max(Q, axis=1))
         renderer.render(obs)

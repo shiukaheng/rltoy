@@ -1,78 +1,113 @@
+from dataclasses import dataclass
+
 import numpy as np
 import pygame
+import tyro
 
 from frozen_lake import make_frozen_lake
 from map_renderer import GridMapRenderer
-from bettermdptools.algorithms.rl import RL
-
-N_EPISODES = 500
-GAMMA = 0.99
-STEP_DELAY = 0.01
-EPISODE_DELAY = 0.005
-ALPHA_INIT, ALPHA_MIN, ALPHA_RATIO = 0.5, 0.01, 0.5
-EPS_INIT, EPS_MIN, EPS_RATIO = 1.0, 0.1, 0.9
-
-env, _ = make_frozen_lake(is_slippery=False)
-nS = env.observation_space.n
-nA = env.action_space.n
-
-renderer = GridMapRenderer(env.unwrapped, caption="FrozenLake SARSA (training)")
-Q = np.zeros((nS, nA), dtype=np.float32)
-
-alphas = RL.decay_schedule(ALPHA_INIT, ALPHA_MIN, ALPHA_RATIO, N_EPISODES)
-epsilons = RL.decay_schedule(EPS_INIT, EPS_MIN, EPS_RATIO, N_EPISODES)
 
 
-def select_action(state, epsilon):
-    if np.random.random() < epsilon:
-        return np.random.randint(nA)
+@dataclass
+class Config:
+    n_episodes: int = 500
+    gamma: float = 0.99
+    alpha_init: float = 0.5
+    alpha_min: float = 0.01
+    alpha_decay_ratio: float = 0.5
+    epsilon_init: float = 1.0
+    epsilon_min: float = 0.1
+    epsilon_decay_ratio: float = 0.9
+    step_delay: float = 0.01
+    episode_delay: float = 0.005
+    evaluation_step_delay: float = 0.3
+    is_slippery: bool = False
+    seed: int | None = None
 
-    # Q starts at zero, so randomize tied best actions instead of always
-    # choosing np.argmax's first action (left).
-    values = Q[state]
-    return int(np.random.choice(np.flatnonzero(values == values.max())))
+
+def decay_schedule(initial: float, minimum: float, ratio: float, steps: int) -> np.ndarray:
+    if steps < 1:
+        raise ValueError("n_episodes must be at least 1")
+    if steps == 1:
+        return np.array([initial])
+
+    decay_steps = min(steps, max(2, int(steps * ratio)))
+    values = np.logspace(-2, 0, decay_steps)[::-1]
+    values = (values - values.min()) / (values.max() - values.min())
+    values = (initial - minimum) * values + minimum
+    return np.pad(values, (0, steps - decay_steps), mode="edge")
 
 
-for e in range(N_EPISODES):
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            renderer.close(); env.close(); raise SystemExit
+def main(config: Config) -> None:
+    rng = np.random.default_rng(config.seed)
+    env, _ = make_frozen_lake(is_slippery=config.is_slippery)
+    n_states = env.observation_space.n
+    n_actions = env.action_space.n
 
-    state, _ = env.reset()
-    terminated, truncated = False, False
+    renderer = GridMapRenderer(env.unwrapped, caption="FrozenLake SARSA (training)")
+    Q = np.zeros((n_states, n_actions), dtype=np.float32)
+    alphas = decay_schedule(
+        config.alpha_init,
+        config.alpha_min,
+        config.alpha_decay_ratio,
+        config.n_episodes,
+    )
+    epsilons = decay_schedule(
+        config.epsilon_init,
+        config.epsilon_min,
+        config.epsilon_decay_ratio,
+        config.n_episodes,
+    )
 
-    action = select_action(state, epsilons[e])
+    def select_action(state: int, epsilon: float) -> int:
+        if rng.random() < epsilon:
+            return int(rng.integers(n_actions))
 
-    while not (terminated or truncated):
-        next_state, reward, terminated, truncated, _ = env.step(action)
-        done = terminated or truncated
+        # Q starts at zero, so randomize tied best actions instead of always
+        # choosing np.argmax's first action (left).
+        values = Q[state]
+        return int(rng.choice(np.flatnonzero(values == values.max())))
 
-        next_action = select_action(next_state, epsilons[e])
-        td_target = reward + GAMMA * Q[next_state, next_action] * (not done)
-        Q[state, action] += alphas[e] * (td_target - Q[state, action])
+    try:
+        for episode in range(config.n_episodes):
+            state, _ = env.reset(seed=config.seed if episode == 0 else None)
+            terminated, truncated = False, False
+            action = select_action(state, epsilons[episode])
 
-        state, action = next_state, next_action
+            while not (terminated or truncated):
+                next_state, reward, terminated, truncated, _ = env.step(action)
+                done = terminated or truncated
+                next_action = select_action(next_state, epsilons[episode])
+                td_target = reward + config.gamma * Q[next_state, next_action] * (not done)
+                Q[state, action] += alphas[episode] * (td_target - Q[state, action])
+                state, action = next_state, next_action
 
-        V = np.max(Q, axis=1)
-        renderer.set_values(V)
-        renderer.render(state)
-        pygame.display.set_caption(f"FrozenLake SARSA — ep {e + 1}/{N_EPISODES}")
-        pygame.time.wait(int(STEP_DELAY * 1000))
+                renderer.set_values(np.max(Q, axis=1))
+                renderer.render(state)
+                pygame.display.set_caption(
+                    f"FrozenLake SARSA - ep {episode + 1}/{config.n_episodes}"
+                )
+                pygame.time.wait(int(config.step_delay * 1000))
 
-    pygame.time.wait(int(EPISODE_DELAY * 1000))
+            pygame.time.wait(int(config.episode_delay * 1000))
 
-pygame.display.set_caption("FrozenLake SARSA (evaluation)")
+        pygame.display.set_caption("FrozenLake SARSA (evaluation)")
+        obs, _ = env.reset()
+        renderer.set_values(np.max(Q, axis=1))
+        renderer.render(obs)
 
-obs, info = env.reset()
-renderer.set_values(np.max(Q, axis=1))
-renderer.render(obs)
+        terminated, truncated = False, False
+        while not (terminated or truncated):
+            pygame.time.wait(int(config.evaluation_step_delay * 1000))
+            action = select_action(obs, epsilon=0.0)
+            obs, reward, terminated, truncated, _ = env.step(action)
+            renderer.render(obs)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        renderer.close()
+        env.close()
 
-terminated, truncated = False, False
-while not (terminated or truncated):
-    pygame.time.wait(300)
-    action = select_action(obs, epsilon=0.0)
-    obs, reward, terminated, truncated, info = env.step(action)
-    renderer.render(obs)
 
-renderer.close()
-env.close()
+if __name__ == "__main__":
+    main(tyro.cli(Config))
