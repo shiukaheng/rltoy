@@ -1,33 +1,18 @@
-import copy
 import pygame
-import gymnasium as gym
-from bettermdptools.algorithms.planner import Planner
 
+from frozen_lake import make_frozen_lake
 from map_renderer import GridMapRenderer
 
-STEP_COST = -0.04
-
-def penalize_steps(P, cost):
-    P = copy.deepcopy(P)
-    for actions in P.values():
-        for transitions in actions.values():
-            for i, (prob, ns, r, done) in enumerate(transitions):
-                if not done:
-                    transitions[i] = (prob, ns, r + cost, done)
-    return P
-
-env = gym.make("FrozenLake-v1", is_slippery=False)
-
-PP = penalize_steps(env.unwrapped.P, STEP_COST)
+env, V = make_frozen_lake(
+    is_slippery=False,
+    step_cost=-0.04,
+)
 
 renderer = GridMapRenderer(env.unwrapped, caption="FrozenLake (interactive)")
-V, _, _ = Planner(PP).value_iteration()
 renderer.set_values(V)
 
 obs, info = env.reset()
 renderer.render(obs)
-
-terminated = truncated = False
 
 while True:
     for event in pygame.event.get():
