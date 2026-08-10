@@ -7,10 +7,13 @@ import tyro
 
 from bettermdptools.algorithms.planner import Planner
 from frozen_lake import make_frozen_lake
+from graph_world import make_graph_world
 
 
 @dataclass
 class Config:
+    env: str = "frozen_lake"
+    graph_path: Path = Path("graphs/risk_vs_delay.json")
     n_episodes: int = 500
     n_runs: int = 20
     gamma: float = 0.99
@@ -21,6 +24,7 @@ class Config:
     epsilon_init: float = 1.0
     epsilon_min: float = 0.1
     epsilon_decay_ratio: float = 0.9
+    step_cost: float | None = None
     is_slippery: bool = False
     seed: int = 0
     output_path: Path = Path("td_control_comparison.png")
@@ -53,18 +57,8 @@ def train(
     n_actions = env.action_space.n
     Q = np.zeros((n_states, n_actions), dtype=np.float64)
     losses = np.empty(config.n_episodes)
-    alphas = decay_schedule(
-        config.alpha_init,
-        config.alpha_min,
-        config.alpha_decay_ratio,
-        config.n_episodes,
-    )
-    epsilons = decay_schedule(
-        config.epsilon_init,
-        config.epsilon_min,
-        config.epsilon_decay_ratio,
-        config.n_episodes,
-    )
+    alphas = decay_schedule(config.alpha_init, config.alpha_min, config.alpha_decay_ratio, config.n_episodes)
+    epsilons = decay_schedule(config.epsilon_init, config.epsilon_min, config.epsilon_decay_ratio, config.n_episodes)
 
     def select_action(state: int, epsilon: float) -> int:
         if rng.random() < epsilon:
@@ -108,12 +102,22 @@ def train(
     return losses
 
 
+def _make_env(config: Config) -> tuple:
+    if config.env == "frozen_lake":
+        env, _ = make_frozen_lake(is_slippery=config.is_slippery)
+        ground_truth_v, _, _ = Planner(env.unwrapped.P).value_iteration(gamma=config.gamma)
+        ground_truth_v = np.asarray(ground_truth_v, dtype=np.float64)
+        valid_states = (env.unwrapped.desc.reshape(-1) != b"H")
+    else:
+        env, _ = make_graph_world(config.graph_path, gamma=config.gamma, step_cost=config.step_cost)
+        ground_truth_v, _, _ = Planner(env.P).value_iteration(gamma=config.gamma)
+        ground_truth_v = np.asarray(ground_truth_v, dtype=np.float64)
+        valid_states = ~env.terminal_states()
+    return env, ground_truth_v, valid_states
+
+
 def main(config: Config) -> None:
-    env, _ = make_frozen_lake(is_slippery=config.is_slippery)
-    ground_truth_v, _, _ = Planner(env.unwrapped.P).value_iteration(gamma=config.gamma)
-    ground_truth_v = np.asarray(ground_truth_v, dtype=np.float64)
-    valid_states = (env.unwrapped.desc.reshape(-1) != b"H")
-    env.close()
+    _, ground_truth_v, valid_states = _make_env(config)
 
     algorithms = ("SARSA", "SARSA(lambda)", "Q-learning")
     losses_by_algorithm = {
@@ -123,14 +127,9 @@ def main(config: Config) -> None:
 
     for run in range(config.n_runs):
         for algorithm in algorithms:
-            env, _ = make_frozen_lake(is_slippery=config.is_slippery)
+            env, _, _ = _make_env(config)
             losses_by_algorithm[algorithm][run] = train(
-                algorithm,
-                env,
-                ground_truth_v,
-                valid_states,
-                config,
-                config.seed + run,
+                algorithm, env, ground_truth_v, valid_states, config, config.seed + run,
             )
             env.close()
 
@@ -142,8 +141,9 @@ def main(config: Config) -> None:
         line = ax.plot(episodes, mean, label=algorithm)[0]
         ax.fill_between(episodes, mean - stderr, mean + stderr, alpha=0.2, color=line.get_color())
 
+    env_label = "FrozenLake" if config.env == "frozen_lake" else "GraphWorld"
     ax.set(
-        title="TD control convergence on FrozenLake",
+        title=f"TD control convergence on {env_label}",
         xlabel="Training episode",
         ylabel="MSE of learned V against planner V",
     )
@@ -152,6 +152,7 @@ def main(config: Config) -> None:
     fig.tight_layout()
 
     fig.savefig(config.output_path, dpi=150)
+    print(f"Saved {config.output_path}")
     if config.show:
         plt.show()
 

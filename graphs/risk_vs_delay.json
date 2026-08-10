@@ -1,0 +1,51 @@
+{
+  "name": "risk_vs_delay",
+  "start_state": "start",
+  "actions": {
+    "safe": {
+      "label": "safe",
+      "key": "s"
+    },
+    "risky": {
+      "label": "risky",
+      "key": "r"
+    }
+  },
+  "states": {
+    "start": {
+      "label": "Start",
+      "position": [0.12, 0.50],
+      "actions": {
+        "safe": [
+          {"probability": 1.0, "next_state": "staging", "reward": 0.0}
+        ],
+        "risky": [
+          {"probability": 0.8, "next_state": "goal", "reward": 12.0, "terminated": true},
+          {"probability": 0.2, "next_state": "loss", "reward": -10.0, "terminated": true}
+        ]
+      }
+    },
+    "staging": {
+      "label": "Staging",
+      "position": [0.48, 0.50],
+      "actions": {
+        "safe": [
+          {"probability": 1.0, "next_state": "goal", "reward": 10.0, "terminated": true}
+        ],
+        "risky": [
+          {"probability": 1.0, "next_state": "loss", "reward": 0.0, "terminated": true}
+        ]
+      }
+    },
+    "goal": {
+      "label": "Goal",
+      "position": [0.85, 0.25],
+      "terminal": true
+    },
+    "loss": {
+      "label": "Loss",
+      "position": [0.85, 0.75],
+      "terminal": true
+    }
+  }
+}

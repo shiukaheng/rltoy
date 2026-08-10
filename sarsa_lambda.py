@@ -1,15 +1,20 @@
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import pygame
 import tyro
 
 from frozen_lake import make_frozen_lake
+from graph_world import make_graph_world
 from map_renderer import GridMapRenderer
+from graph_renderer import GraphRenderer
 
 
 @dataclass
 class Config:
+    env: str = "frozen_lake"
+    graph_path: Path = Path("graphs/risk_vs_delay.json")
     n_episodes: int = 500
     gamma: float = 0.99
     trace_decay: float = 0.8
@@ -41,29 +46,23 @@ def decay_schedule(initial: float, minimum: float, ratio: float, steps: int) -> 
 
 def main(config: Config) -> None:
     rng = np.random.default_rng(config.seed)
-    env, _ = make_frozen_lake(is_slippery=config.is_slippery)
+    if config.env == "frozen_lake":
+        env, _ = make_frozen_lake(is_slippery=config.is_slippery)
+        renderer = GridMapRenderer(env.unwrapped, caption="FrozenLake SARSA(lambda) (training)")
+    else:
+        env, _ = make_graph_world(config.graph_path)
+        renderer = GraphRenderer(env, caption="GraphWorld SARSA(lambda) (training)")
+
     n_states = env.observation_space.n
     n_actions = env.action_space.n
 
-    renderer = GridMapRenderer(env.unwrapped, caption="FrozenLake SARSA(lambda) (training)")
     Q = np.zeros((n_states, n_actions), dtype=np.float32)
-    alphas = decay_schedule(
-        config.alpha_init,
-        config.alpha_min,
-        config.alpha_decay_ratio,
-        config.n_episodes,
-    )
-    epsilons = decay_schedule(
-        config.epsilon_init,
-        config.epsilon_min,
-        config.epsilon_decay_ratio,
-        config.n_episodes,
-    )
+    alphas = decay_schedule(config.alpha_init, config.alpha_min, config.alpha_decay_ratio, config.n_episodes)
+    epsilons = decay_schedule(config.epsilon_init, config.epsilon_min, config.epsilon_decay_ratio, config.n_episodes)
 
     def select_action(state: int, epsilon: float) -> int:
         if rng.random() < epsilon:
             return int(rng.integers(n_actions))
-
         values = Q[state]
         return int(rng.choice(np.flatnonzero(values == values.max())))
 
@@ -92,14 +91,14 @@ def main(config: Config) -> None:
                 renderer.set_values(np.max(Q, axis=1))
                 renderer.render(state)
                 pygame.display.set_caption(
-                    f"FrozenLake SARSA(lambda={config.trace_decay}) - "
+                    f"SARSA(lambda={config.trace_decay}) - "
                     f"ep {episode + 1}/{config.n_episodes}"
                 )
                 pygame.time.wait(int(config.step_delay * 1000))
 
             pygame.time.wait(int(config.episode_delay * 1000))
 
-        pygame.display.set_caption("FrozenLake SARSA(lambda) (evaluation)")
+        pygame.display.set_caption("SARSA(lambda) (evaluation)")
         obs, _ = env.reset()
         renderer.set_values(np.max(Q, axis=1))
         renderer.render(obs)
