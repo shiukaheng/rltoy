@@ -16,6 +16,10 @@ dependencies = [
 [project.scripts]
 rltoy-q-learning = "rltoy.algorithms.q_learning:main"
 rltoy-deep-q-learning = "rltoy.algorithms.deep_q_learning:main"
+rltoy-actor-critic = "rltoy.algorithms.actor_critic:main"
+rltoy-gae = "rltoy.algorithms.gae:main"
+rltoy-reinforce = "rltoy.algorithms.reinforce:main"
+rltoy-reinforce-baseline = "rltoy.algorithms.reinforce_baseline:main"
 rltoy-sarsa = "rltoy.algorithms.sarsa:main"
 rltoy-sarsa-lambda = "rltoy.algorithms.sarsa_lambda:main"
 rltoy-compare-tabular = "rltoy.experiments.compare_tabular:main"

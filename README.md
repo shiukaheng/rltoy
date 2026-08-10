@@ -11,6 +11,10 @@ Install the project with `uv sync`, then run a learner directly from its file:
 ```bash
 uv run src/rltoy/algorithms/q_learning.py --episodes 1000
 uv run src/rltoy/algorithms/deep_q_learning.py --episodes 1000
+uv run src/rltoy/algorithms/actor_critic.py --episodes 1000
+uv run src/rltoy/algorithms/gae.py --episodes 1000 --gae-lambda 0.95
+uv run src/rltoy/algorithms/reinforce.py --episodes 1000
+uv run src/rltoy/algorithms/reinforce_baseline.py --episodes 1000
 uv run src/rltoy/algorithms/sarsa.py --episodes 1000
 uv run src/rltoy/algorithms/sarsa_lambda.py --episodes 1000 --trace-decay 0.8
 ```
@@ -22,7 +26,7 @@ uv run src/rltoy/algorithms/q_learning.py --render --render-delay-ms 50
 uv run rltoy-interactive-graph
 ```
 
-Copy `q_learning.py` to start an experiment. The copied file is immediately runnable; change its `train` loop, then run `uv run src/rltoy/algorithms/my_algorithm.py`. No algorithm registry or project configuration edit is required. The `rltoy-q-learning`, `rltoy-deep-q-learning`, `rltoy-sarsa`, and `rltoy-sarsa-lambda` commands remain optional aliases for the bundled files.
+Copy `q_learning.py` to start an experiment. The copied file is immediately runnable; change its `train` loop, then run `uv run src/rltoy/algorithms/my_algorithm.py`. No algorithm registry or project configuration edit is required. The `rltoy-q-learning`, `rltoy-deep-q-learning`, `rltoy-actor-critic`, `rltoy-gae`, `rltoy-reinforce`, `rltoy-reinforce-baseline`, `rltoy-sarsa`, and `rltoy-sarsa-lambda` commands remain optional aliases for the bundled files.
 
 Compare the actual learner implementations with the graph's exact value-iteration solution:
 
@@ -58,10 +62,14 @@ Any finite discrete Gymnasium environment can be supplied to the tabular `train`
 ```text
 src/rltoy/algorithms/q_learning.py      # full Q-learning loop
 src/rltoy/algorithms/deep_q_learning.py # full Deep Q-learning (DQN) loop
+src/rltoy/algorithms/actor_critic.py    # full one-step TD actor-critic loop
+src/rltoy/algorithms/gae.py             # full GAE actor-critic loop
+src/rltoy/algorithms/reinforce.py        # full vanilla REINFORCE loop
+src/rltoy/algorithms/reinforce_baseline.py # full REINFORCE-with-baseline loop
 src/rltoy/algorithms/sarsa.py           # full SARSA loop
 src/rltoy/algorithms/sarsa_lambda.py    # full accumulating-trace SARSA(lambda) loop
 src/rltoy/envs/graph_world.py           # JSON graph MDP and Gymnasium interface
 src/rltoy/visualization/graph_renderer.py
 ```
 
-Pygame visualization observes training snapshots but never enters learner logic. Deep Q-learning follows the same boundary: it is a direct PyTorch algorithm file operating on discrete Gymnasium environments, with a local replay buffer because DQN needs one.
+Pygame visualization observes training snapshots but never enters learner logic. Value-based learners color nodes with a lava ramp and label them with `V=...`; policy-only learners such as REINFORCE use that ramp on labeled, weighted outgoing action edges. REINFORCE with a baseline displays both: value colors on nodes and policy colors on edges. The on-screen key identifies the active meanings. The neural learners are direct PyTorch algorithm files operating on discrete Gymnasium environments. Deep Q-learning has a local replay buffer because DQN needs one; vanilla REINFORCE uses only each completed episode and no baseline.
