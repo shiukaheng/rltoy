@@ -139,7 +139,11 @@ def train(
             trajectory.append(next_state)
             with torch.no_grad():
                 all_q_values = online(one_hot(np.arange(states), states, device)).cpu().numpy()
-            observer(TrainingSnapshot(episode, next_state, all_q_values, tuple(trajectory)))
+            observer(
+                TrainingSnapshot(
+                    episode, next_state, tuple(trajectory), action_values=all_q_values
+                )
+            )
             if done:
                 break
             state = next_state

@@ -41,7 +41,7 @@ def run(
         observer = GraphTrainingObserver(renderer, config.render_every_steps, config.render_delay_ms)
     try:
         result = train(env, config, config.seed, observer or (lambda _: None))
-        print(f"Final mean action value: {result.q_values.max(axis=1).mean():.3f}")
+        print(f"Final mean maximum action score: {result.q_values.max(axis=1).mean():.3f}")
         return result
     finally:
         if renderer is not None:

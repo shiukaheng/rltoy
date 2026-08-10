@@ -9,7 +9,7 @@ from rltoy.visualization.graph_renderer import GraphRenderer
 def main() -> None:
     env = make_branching_risk()
     renderer = GraphRenderer(env, "Branching Risk (interactive)")
-    renderer.set_values(planner_values(env, gamma=0.99))
+    renderer.set_state_values(planner_values(env, gamma=0.99))
     keys = {
         getattr(pygame, f"K_{details['key']}"): env.action_index(name)
         for name, details in env.graph_spec["actions"].items()

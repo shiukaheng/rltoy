@@ -22,8 +22,18 @@ class TabularConfig:
 class TrainingSnapshot:
     episode: int
     state: int
-    q_values: np.ndarray
     trajectory: tuple[int, ...]
+    action_values: np.ndarray | None = None
+    state_values: np.ndarray | None = None
+    action_probabilities: np.ndarray | None = None
+
+    def __post_init__(self) -> None:
+        if (
+            self.action_values is None
+            and self.state_values is None
+            and self.action_probabilities is None
+        ):
+            raise ValueError("Training snapshots need action values, state values, or action probabilities")
 
 
 @dataclass(frozen=True)

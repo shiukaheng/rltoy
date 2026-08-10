@@ -43,7 +43,11 @@ def train(
 
             episode_return += reward
             trajectory.append(next_state)
-            observer(TrainingSnapshot(episode, next_state, q_values, tuple(trajectory)))
+            observer(
+                TrainingSnapshot(
+                    episode, next_state, tuple(trajectory), action_values=q_values
+                )
+            )
             if done:
                 break
             state = next_state
