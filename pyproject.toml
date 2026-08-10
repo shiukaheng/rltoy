@@ -15,6 +15,7 @@ dependencies = [
 
 [project.scripts]
 rltoy-q-learning = "rltoy.algorithms.q_learning:main"
+rltoy-monte-carlo = "rltoy.algorithms.monte_carlo:main"
 rltoy-deep-q-learning = "rltoy.algorithms.deep_q_learning:main"
 rltoy-actor-critic = "rltoy.algorithms.actor_critic:main"
 rltoy-gae = "rltoy.algorithms.gae:main"
