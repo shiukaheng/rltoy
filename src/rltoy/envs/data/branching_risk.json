@@ -1,0 +1,21 @@
+{
+  "name": "branching_risk",
+  "start_state": "start",
+  "actions": {
+    "a": {"label": "A", "key": "a"},
+    "b": {"label": "B", "key": "b"},
+    "c": {"label": "C", "key": "c"}
+  },
+  "states": {
+    "start": {"label": "Start", "position": [0.5, 0.08], "actions": {"a": [{"probability": 1.0, "next_state": "safe", "reward": 5.0}], "b": [{"probability": 1.0, "next_state": "medium_1", "reward": 0.0}], "c": [{"probability": 1.0, "next_state": "large_1", "reward": 0.0}]}},
+    "medium_1": {"label": "Medium 1", "position": [0.3, 0.35], "actions": {"a": [{"probability": 1.0, "next_state": "medium_win", "reward": 20.0}], "b": [{"probability": 1.0, "next_state": "medium_loss", "reward": -10.0}], "c": [{"probability": 1.0, "next_state": "medium_loss", "reward": -10.0}]}},
+    "large_1": {"label": "Large 1", "position": [0.7, 0.35], "actions": {"a": [{"probability": 1.0, "next_state": "large_2", "reward": 0.0}], "b": [{"probability": 1.0, "next_state": "large_loss_1", "reward": -15.0}], "c": [{"probability": 1.0, "next_state": "large_loss_1", "reward": -15.0}]}},
+    "large_2": {"label": "Large 2", "position": [0.7, 0.62], "actions": {"a": [{"probability": 1.0, "next_state": "large_win", "reward": 50.0}], "b": [{"probability": 1.0, "next_state": "large_loss_2", "reward": -15.0}], "c": [{"probability": 1.0, "next_state": "large_loss_2", "reward": -15.0}]}},
+    "safe": {"label": "Safe: +5", "position": [0.1, 0.35], "terminal": true, "display": {"color": "success"}},
+    "medium_win": {"label": "Medium: +20", "position": [0.1, 0.65], "terminal": true, "display": {"color": "success"}},
+    "medium_loss": {"label": "Medium: -10", "position": [0.45, 0.65], "terminal": true, "display": {"color": "failure"}},
+    "large_loss_1": {"label": "Large: -15", "position": [0.95, 0.62], "terminal": true, "display": {"color": "failure"}},
+    "large_win": {"label": "Large: +50", "position": [0.6, 0.9], "terminal": true, "display": {"color": "success"}},
+    "large_loss_2": {"label": "Large: -15", "position": [0.9, 0.9], "terminal": true, "display": {"color": "failure"}}
+  }
+}

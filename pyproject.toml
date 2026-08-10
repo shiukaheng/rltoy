@@ -1,16 +1,36 @@
 [project]
 name = "rltoy"
 version = "0.1.0"
-description = "Add your description here"
+description = "Readable reinforcement-learning algorithms on pedagogical Gymnasium environments"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "bettermdptools>=0.8.6",
     "gymnasium[toy-text]>=0.26.3",
     "matplotlib>=3.11.1",
+    "pygame>=2.6.1",
     "tyro>=1.0.15",
 ]
+
+[project.scripts]
+rltoy-q-learning = "rltoy.cli.q_learning:main"
+rltoy-sarsa = "rltoy.cli.sarsa:main"
+rltoy-sarsa-lambda = "rltoy.cli.sarsa_lambda:main"
+rltoy-compare-tabular = "rltoy.experiments.compare_tabular:main"
+rltoy-interactive-graph = "rltoy.cli.interactive_graph:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rltoy"]
 
 [tool.uv]
 # bettermdptools pins pygame 2.1.0, which predates CPython 3.13 wheels.
 override-dependencies = ["pygame>=2.6.1"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
