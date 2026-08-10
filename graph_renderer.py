@@ -33,7 +33,7 @@ class GraphRenderer:
                 "terminal": state.get("terminal", False),
             }
 
-        merged_edges = {}
+        self._edges = []
         for s_name, state in spec["states"].items():
             if state.get("terminal", False):
                 continue
@@ -46,24 +46,15 @@ class GraphRenderer:
                     )
                     if is_absorbing:
                         continue
-                    key = (
-                        s_name,
-                        ns,
-                        outcome["probability"],
-                        outcome.get("reward", 0.0),
-                    )
-                    edge = merged_edges.setdefault(
-                        key,
+                    self._edges.append(
                         {
                             "src": s_name,
                             "dst": ns,
-                            "actions": [],
+                            "action": a_name,
                             "prob": outcome["probability"],
                             "reward": outcome.get("reward", 0.0),
-                        },
+                        }
                     )
-                    edge["actions"].append(a_name)
-        self._edges = list(merged_edges.values())
 
         margin = cell * 0.8
         w = int(self._cell * 14 + 2 * margin)
@@ -238,12 +229,11 @@ class GraphRenderer:
                 self._draw_curved_arrow((sx2, sy2), (dx2, dy2), offset, color, width)
 
             prob_str = f"p={e['prob']:.2f}" if e["prob"] != 1.0 else ""
-            reward_str = f"r={e['reward']:+.1f}" if e["reward"] != 0.0 else ""
-            parts = ["/".join(e["actions"])]
+            reward_str = f"r={e['reward']:+.1f}"
+            parts = [e["action"]]
             if prob_str:
                 parts.append(prob_str)
-            if reward_str:
-                parts.append(reward_str)
+            parts.append(reward_str)
             label_text = " | ".join(parts)
             lx, ly = self._label_pos(src_pos, dst_pos, offset)
             lbl = self._font_small.render(label_text, True, (200, 200, 200))
