@@ -6,20 +6,22 @@ Its design rule is simple: an algorithm's training loop and update rule live tog
 
 ## Run
 
-Install the project with `uv sync`, then run a learner headlessly:
+Install the project with `uv sync`, then run a learner directly from its file:
 
 ```bash
-uv run rltoy-q-learning --episodes 1000
-uv run rltoy-sarsa --episodes 1000
-uv run rltoy-sarsa-lambda --episodes 1000 --trace-decay 0.8
+uv run src/rltoy/algorithms/q_learning.py --episodes 1000
+uv run src/rltoy/algorithms/sarsa.py --episodes 1000
+uv run src/rltoy/algorithms/sarsa_lambda.py --episodes 1000 --trace-decay 0.8
 ```
 
 Animate a learner on the bundled graph:
 
 ```bash
-uv run rltoy-q-learning --render --render-delay-ms 50
+uv run src/rltoy/algorithms/q_learning.py --render --render-delay-ms 50
 uv run rltoy-interactive-graph
 ```
+
+Copy `q_learning.py` to start an experiment. The copied file is immediately runnable; change its `train` loop, then run `uv run src/rltoy/algorithms/my_algorithm.py`. No algorithm registry or project configuration edit is required. The `rltoy-q-learning`, `rltoy-sarsa`, and `rltoy-sarsa-lambda` commands remain optional aliases for the bundled files.
 
 Compare the actual learner implementations with the graph's exact value-iteration solution:
 

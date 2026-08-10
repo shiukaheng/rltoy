@@ -66,3 +66,21 @@ def train(
         state_values[episode] = q_values.max(axis=1)
 
     return TrainingResult(q_values, returns, state_values)
+
+
+def main() -> None:
+    from dataclasses import dataclass
+
+    import tyro
+
+    from rltoy.cli.common import RunConfig, run
+
+    @dataclass(frozen=True)
+    class Config(RunConfig):
+        trace_decay: float = 0.8
+
+    run(train, tyro.cli(Config), "SARSA(lambda)")
+
+
+if __name__ == "__main__":
+    main()

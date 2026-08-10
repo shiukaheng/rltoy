@@ -13,9 +13,9 @@ dependencies = [
 ]
 
 [project.scripts]
-rltoy-q-learning = "rltoy.cli.q_learning:main"
-rltoy-sarsa = "rltoy.cli.sarsa:main"
-rltoy-sarsa-lambda = "rltoy.cli.sarsa_lambda:main"
+rltoy-q-learning = "rltoy.algorithms.q_learning:main"
+rltoy-sarsa = "rltoy.algorithms.sarsa:main"
+rltoy-sarsa-lambda = "rltoy.algorithms.sarsa_lambda:main"
 rltoy-compare-tabular = "rltoy.experiments.compare_tabular:main"
 rltoy-interactive-graph = "rltoy.cli.interactive_graph:main"
 

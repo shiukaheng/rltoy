@@ -52,3 +52,15 @@ def train(
         state_values[episode] = q_values.max(axis=1)
 
     return TrainingResult(q_values, returns, state_values)
+
+
+def main() -> None:
+    import tyro
+
+    from rltoy.cli.common import RunConfig, run
+
+    run(train, tyro.cli(RunConfig), "Q-learning")
+
+
+if __name__ == "__main__":
+    main()

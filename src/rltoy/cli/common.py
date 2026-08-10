@@ -28,7 +28,7 @@ def make_environment(config: RunConfig) -> gym.Env:
 
 
 def run(
-    train: Callable[..., TrainingResult], config: RunConfig, title: str, lambda_config: object | None = None
+    train: Callable[..., TrainingResult], config: RunConfig, title: str
 ) -> TrainingResult:
     env = make_environment(config)
     renderer = None
@@ -40,7 +40,7 @@ def run(
         renderer = GraphRenderer(graph_env, title)
         observer = GraphTrainingObserver(renderer, config.render_every_steps, config.render_delay_ms)
     try:
-        result = train(env, lambda_config or config, config.seed, observer or (lambda _: None))
+        result = train(env, config, config.seed, observer or (lambda _: None))
         print(f"Final mean action value: {result.q_values.max(axis=1).mean():.3f}")
         return result
     finally:
