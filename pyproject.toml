@@ -9,11 +9,13 @@ dependencies = [
     "gymnasium[toy-text]>=0.26.3",
     "matplotlib>=3.11.1",
     "pygame>=2.6.1",
+    "torch>=2.13.0",
     "tyro>=1.0.15",
 ]
 
 [project.scripts]
 rltoy-q-learning = "rltoy.algorithms.q_learning:main"
+rltoy-deep-q-learning = "rltoy.algorithms.deep_q_learning:main"
 rltoy-sarsa = "rltoy.algorithms.sarsa:main"
 rltoy-sarsa-lambda = "rltoy.algorithms.sarsa_lambda:main"
 rltoy-compare-tabular = "rltoy.experiments.compare_tabular:main"
