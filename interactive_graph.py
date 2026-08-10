@@ -9,6 +9,8 @@ renderer.set_values(values)
 
 keys = {pygame.K_a: 0, pygame.K_b: 1, pygame.K_c: 2}
 state, _ = env.reset()
+trajectory = [state]
+renderer.set_trajectory(trajectory)
 renderer.render(state)
 
 print("A: +5 now | B: two-level branch | C: three-level branch | R: reset")
@@ -23,13 +25,19 @@ while True:
             continue
         if event.key == pygame.K_r:
             state, _ = env.reset()
+            trajectory = [state]
         elif event.key in keys:
             action = keys[event.key]
             state, reward, terminated, _, _ = env.step(action)
+            trajectory.append(state)
             print(f"Action: {env.action_names[action]}, reward: {reward:+.1f}")
             if terminated:
+                renderer.set_trajectory(trajectory)
+                renderer.render(state)
                 pygame.time.wait(800)
                 state, _ = env.reset()
+                trajectory = [state]
         else:
             continue
+        renderer.set_trajectory(trajectory)
         renderer.render(state)

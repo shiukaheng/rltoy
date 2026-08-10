@@ -11,7 +11,7 @@ from graph_world import make_graph_world
 
 @dataclass
 class Config:
-    n_episodes: int = 500
+    n_episodes: int = 1000
     gamma: float = 0.99
     alpha_init: float = 0.5
     alpha_min: float = 0.01
@@ -19,7 +19,7 @@ class Config:
     epsilon_init: float = 1.0
     epsilon_min: float = 0.1
     epsilon_decay_ratio: float = 0.9
-    step_delay: float = 0.01
+    step_delay: float = 0.1
     evaluation_step_delay: float = 0.3
     seed: int | None = None
 
@@ -60,6 +60,7 @@ def run(algorithm: str, config: Config) -> None:
     try:
         for episode in range(config.n_episodes):
             state, _ = env.reset(seed=config.seed if episode == 0 else None)
+            trajectory = [state]
             action = choose_action(state, epsilons[episode])
             traces = np.zeros_like(Q) if algorithm == "SARSA(lambda)" else None
             terminated = False
@@ -83,19 +84,25 @@ def run(algorithm: str, config: Config) -> None:
                         Q[state, action] += alphas[episode] * error
 
                 state, action = next_state, next_action
+                trajectory.append(state)
                 renderer.set_values(np.max(Q, axis=1))
+                renderer.set_trajectory(trajectory)
                 renderer.render(state)
                 pygame.display.set_caption(f"{algorithm} - episode {episode + 1}/{config.n_episodes}")
                 pygame.time.wait(int(config.step_delay * 1000))
 
         pygame.display.set_caption(f"{algorithm} (evaluation)")
         state, _ = env.reset()
+        trajectory = [state]
         renderer.set_values(np.max(Q, axis=1))
+        renderer.set_trajectory(trajectory)
         renderer.render(state)
         terminated = False
         while not terminated:
             pygame.time.wait(int(config.evaluation_step_delay * 1000))
             state, _, terminated, _, _ = env.step(choose_action(state, epsilon=0.0))
+            trajectory.append(state)
+            renderer.set_trajectory(trajectory)
             renderer.render(state)
     except KeyboardInterrupt:
         pass

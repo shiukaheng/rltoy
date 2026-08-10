@@ -18,6 +18,7 @@ class GraphRenderer:
         self._cell = cell
         self._values: np.ndarray | None = None
         self._policy: np.ndarray | None = None
+        self._trajectory: list[int] = []
         self._vmin = 0.0
         self._vmax = 1.0
         self._node_radius = int(cell * 0.38)
@@ -92,6 +93,16 @@ class GraphRenderer:
             return
         self._policy = np.asarray(actions, dtype=int).ravel()
 
+    def set_trajectory(self, states: Sequence[int] | None):
+        """Highlight the ordered states visited during the current episode."""
+        if states is None:
+            self._trajectory = []
+            return
+        trajectory = [int(state) for state in states]
+        if any(state < 0 or state >= len(self._state_names) for state in trajectory):
+            raise ValueError("trajectory contains an invalid state")
+        self._trajectory = trajectory
+
     def _to_screen(self, nx: float, ny: float) -> tuple[float, float]:
         x = self._margin + nx * (self._screen.get_width() - 2 * self._margin)
         y = self._margin + ny * (self._screen.get_height() - 2 * self._margin)
@@ -136,7 +147,7 @@ class GraphRenderer:
         ]
         pygame.draw.polygon(self._screen, color, pts)
 
-    def _draw_curved_arrow(self, src_pos, dst_pos, offset, color):
+    def _draw_curved_arrow(self, src_pos, dst_pos, offset, color, width=2):
         sx, sy = src_pos
         dx, dy = dst_pos
         mid_x = (sx + dx) / 2
@@ -155,7 +166,7 @@ class GraphRenderer:
             y = (1 - t) ** 2 * sy + 2 * (1 - t) * t * cp_y + t**2 * dy
             pts.append((int(x), int(y)))
         if len(pts) >= 2:
-            pygame.draw.lines(self._screen, color, False, pts, 2)
+            pygame.draw.lines(self._screen, color, False, pts, width)
 
         tip_angle = math.atan2(pts[-1][1] - pts[-2][1], pts[-1][0] - pts[-2][0])
         self._draw_arrowhead(pts[-1][0], pts[-1][1], tip_angle, color)
@@ -194,6 +205,11 @@ class GraphRenderer:
                 raise KeyboardInterrupt
 
         self._screen.fill((15, 15, 15))
+        trail_edges = {
+            (self._state_names[source], self._state_names[target])
+            for source, target in zip(self._trajectory, self._trajectory[1:])
+        }
+        visited_states = set(self._trajectory)
 
         edge_groups: dict[tuple[str, str], list] = {}
         for e in self._edges:
@@ -210,15 +226,16 @@ class GraphRenderer:
             src_pos = self._to_screen(*self._nodes[e["src"]]["pos"])
             dst_pos = self._to_screen(*self._nodes[e["dst"]]["pos"])
             sx2, sy2, dx2, dy2 = self._shorten_line(*src_pos, *dst_pos, self._node_radius * 1.02)
+            on_trajectory = (e["src"], e["dst"]) in trail_edges
+            color = (255, 210, 60) if on_trajectory else (160, 160, 160)
+            width = 4 if on_trajectory else 2
 
             if offset == 0.0:
-                color = (160, 160, 160)
-                pygame.draw.line(self._screen, color, (sx2, sy2), (dx2, dy2), 2)
+                pygame.draw.line(self._screen, color, (sx2, sy2), (dx2, dy2), width)
                 angle = math.atan2(dy2 - sy2, dx2 - sx2)
                 self._draw_arrowhead(dx2, dy2, angle, color)
             else:
-                color = (160, 160, 160)
-                self._draw_curved_arrow((sx2, sy2), (dx2, dy2), offset, color)
+                self._draw_curved_arrow((sx2, sy2), (dx2, dy2), offset, color, width)
 
             prob_str = f"p={e['prob']:.2f}" if e["prob"] != 1.0 else ""
             reward_str = f"r={e['reward']:+.1f}" if e["reward"] != 0.0 else ""
@@ -239,6 +256,14 @@ class GraphRenderer:
             pygame.draw.circle(self._screen, (50, 50, 50), (int(cx), int(cy)), self._node_radius, 2)
 
             si = self._state_index[name]
+            if si in visited_states:
+                pygame.draw.circle(
+                    self._screen,
+                    (255, 210, 60),
+                    (int(cx), int(cy)),
+                    self._node_radius + 3,
+                    width=3,
+                )
             label_center = (
                 (cx, cy)
                 if node["terminal"]
@@ -281,10 +306,10 @@ class GraphRenderer:
         cx, cy = self._to_screen(*self._nodes[c_name]["pos"])
         pygame.draw.circle(
             self._screen,
-            (255, 210, 60),
+            (255, 255, 255),
             (int(cx), int(cy)),
-            self._node_radius + 4,
-            width=3,
+            self._node_radius + 7,
+            width=2,
         )
 
         pygame.display.flip()
