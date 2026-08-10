@@ -20,7 +20,7 @@ class GraphRenderer:
         self._policy: np.ndarray | None = None
         self._vmin = 0.0
         self._vmax = 1.0
-        self._node_radius = int(cell * 0.28)
+        self._node_radius = int(cell * 0.38)
 
         self._nodes = {}
         for name, state in spec["states"].items():
@@ -32,7 +32,7 @@ class GraphRenderer:
                 "terminal": state.get("terminal", False),
             }
 
-        self._edges = []
+        merged_edges = {}
         for s_name, state in spec["states"].items():
             if state.get("terminal", False):
                 continue
@@ -45,14 +45,24 @@ class GraphRenderer:
                     )
                     if is_absorbing:
                         continue
-                    self._edges.append({
-                        "src": s_name,
-                        "dst": ns,
-                        "action": a_name,
-                        "prob": outcome["probability"],
-                        "reward": outcome.get("reward", 0.0),
-                        "outcome_idx": i,
-                    })
+                    key = (
+                        s_name,
+                        ns,
+                        outcome["probability"],
+                        outcome.get("reward", 0.0),
+                    )
+                    edge = merged_edges.setdefault(
+                        key,
+                        {
+                            "src": s_name,
+                            "dst": ns,
+                            "actions": [],
+                            "prob": outcome["probability"],
+                            "reward": outcome.get("reward", 0.0),
+                        },
+                    )
+                    edge["actions"].append(a_name)
+        self._edges = list(merged_edges.values())
 
         margin = cell * 0.8
         w = int(self._cell * 14 + 2 * margin)
@@ -83,16 +93,14 @@ class GraphRenderer:
         self._policy = np.asarray(actions, dtype=int).ravel()
 
     def _to_screen(self, nx: float, ny: float) -> tuple[float, float]:
-        pad = 0.12
-        usable = 1.0 - 2 * pad
-        x = self._margin + (nx - pad) / usable * self._screen.get_width() * 0.85
-        y = self._margin + (ny - pad) / usable * self._screen.get_height() * 0.85
+        x = self._margin + nx * (self._screen.get_width() - 2 * self._margin)
+        y = self._margin + ny * (self._screen.get_height() - 2 * self._margin)
         return x, y
 
     def _node_color(self, name: str) -> tuple[int, int, int]:
         si = self._state_index[name]
         if self._nodes[name]["terminal"]:
-            return (60, 200, 60) if "goal" in name.lower() else (220, 60, 60)
+            return (60, 200, 60) if "goal" in name.lower() or "win" in name.lower() else (220, 60, 60)
         if self._values is not None and si < len(self._values) and np.isfinite(self._values[si]):
             span = self._vmax - self._vmin
             t = 0.0 if span == 0 else (self._values[si] - self._vmin) / span
@@ -102,6 +110,15 @@ class GraphRenderer:
             c.hsva = (hue, 100, 100, 100)
             return tuple(c)[:3]
         return (60, 100, 180)
+
+    def _blit_text(self, font, text, center, color=(255, 255, 255)):
+        """Draw outlined text so it stays readable over any value color."""
+        surface = font.render(text, True, color)
+        rect = surface.get_rect(center=center)
+        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            shadow = font.render(text, True, (0, 0, 0))
+            self._screen.blit(shadow, shadow.get_rect(center=(center[0] + dx, center[1] + dy)))
+        self._screen.blit(surface, rect)
 
     def _draw_arrowhead(self, tip_x: float, tip_y: float, angle: float, color, size: int = 10):
         left = angle + math.radians(150)
@@ -205,7 +222,7 @@ class GraphRenderer:
 
             prob_str = f"p={e['prob']:.2f}" if e["prob"] != 1.0 else ""
             reward_str = f"r={e['reward']:+.1f}" if e["reward"] != 0.0 else ""
-            parts = [e["action"]]
+            parts = ["/".join(e["actions"])]
             if prob_str:
                 parts.append(prob_str)
             if reward_str:
@@ -222,8 +239,12 @@ class GraphRenderer:
             pygame.draw.circle(self._screen, (50, 50, 50), (int(cx), int(cy)), self._node_radius, 2)
 
             si = self._state_index[name]
-            lbl = self._font_label.render(node["label"], True, (255, 255, 255))
-            self._screen.blit(lbl, lbl.get_rect(center=(cx, cy - self._node_radius * 0.55)))
+            label_center = (
+                (cx, cy)
+                if node["terminal"]
+                else (cx, cy - self._node_radius - self._font_label.get_height() / 2 - 4)
+            )
+            self._blit_text(self._font_label, node["label"], label_center)
 
             if (
                 not node["terminal"]
@@ -231,9 +252,8 @@ class GraphRenderer:
                 and si < len(self._values)
                 and np.isfinite(self._values[si])
             ):
-                v_text = f"V={self._values[si]:.2f}"
-                v_lbl = self._font_value.render(v_text, True, (255, 255, 255))
-                self._screen.blit(v_lbl, v_lbl.get_rect(center=(cx, cy + self._node_radius * 0.55)))
+                v_text = f"V={self._values[si]:.1f}"
+                self._blit_text(self._font_value, v_text, (cx, cy))
 
             if (
                 not node["terminal"]
@@ -243,16 +263,18 @@ class GraphRenderer:
                 a_idx = self._policy[si]
                 if 0 <= a_idx < len(self._action_names):
                     pi_text = f"pi={self._action_names[a_idx]}"
-                    pi_lbl = self._font_value.render(pi_text, True, (255, 210, 60))
                     y_off = (
-                        self._node_radius * 1.05
+                        self._node_radius + self._font_value.get_height() / 2 + 4
                         if (self._values is not None
                             and si < len(self._values)
                             and np.isfinite(self._values[si]))
-                        else self._node_radius * 0.55
+                        else self._node_radius + self._font_value.get_height() / 2 + 4
                     )
-                    self._screen.blit(
-                        pi_lbl, pi_lbl.get_rect(center=(cx, cy + y_off))
+                    self._blit_text(
+                        self._font_value,
+                        pi_text,
+                        (cx, cy + y_off),
+                        (255, 210, 60),
                     )
 
         c_name = self._state_names[obs]

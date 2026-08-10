@@ -5,15 +5,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import tyro
 
-from bettermdptools.algorithms.planner import Planner
-from frozen_lake import make_frozen_lake
 from graph_world import make_graph_world
+from td_control import decay_schedule
 
 
 @dataclass
 class Config:
-    env: str = "frozen_lake"
-    graph_path: Path = Path("graphs/risk_vs_delay.json")
     n_episodes: int = 500
     n_runs: int = 20
     gamma: float = 0.99
@@ -24,24 +21,9 @@ class Config:
     epsilon_init: float = 1.0
     epsilon_min: float = 0.1
     epsilon_decay_ratio: float = 0.9
-    step_cost: float | None = None
-    is_slippery: bool = False
     seed: int = 0
     output_path: Path = Path("td_control_comparison.png")
     show: bool = False
-
-
-def decay_schedule(initial: float, minimum: float, ratio: float, steps: int) -> np.ndarray:
-    if steps < 1:
-        raise ValueError("n_episodes must be at least 1")
-    if steps == 1:
-        return np.array([initial])
-
-    decay_steps = min(steps, max(2, int(steps * ratio)))
-    values = np.logspace(-2, 0, decay_steps)[::-1]
-    values = (values - values.min()) / (values.max() - values.min())
-    values = (initial - minimum) * values + minimum
-    return np.pad(values, (0, steps - decay_steps), mode="edge")
 
 
 def train(
@@ -103,16 +85,8 @@ def train(
 
 
 def _make_env(config: Config) -> tuple:
-    if config.env == "frozen_lake":
-        env, _ = make_frozen_lake(is_slippery=config.is_slippery)
-        ground_truth_v, _, _ = Planner(env.unwrapped.P).value_iteration(gamma=config.gamma)
-        ground_truth_v = np.asarray(ground_truth_v, dtype=np.float64)
-        valid_states = (env.unwrapped.desc.reshape(-1) != b"H")
-    else:
-        env, _ = make_graph_world(config.graph_path, gamma=config.gamma, step_cost=config.step_cost)
-        ground_truth_v, _, _ = Planner(env.P).value_iteration(gamma=config.gamma)
-        ground_truth_v = np.asarray(ground_truth_v, dtype=np.float64)
-        valid_states = ~env.terminal_states()
+    env, ground_truth_v = make_graph_world("graphs/branching_risk.json", gamma=config.gamma)
+    valid_states = ~env.terminal_states()
     return env, ground_truth_v, valid_states
 
 
@@ -141,9 +115,8 @@ def main(config: Config) -> None:
         line = ax.plot(episodes, mean, label=algorithm)[0]
         ax.fill_between(episodes, mean - stderr, mean + stderr, alpha=0.2, color=line.get_color())
 
-    env_label = "FrozenLake" if config.env == "frozen_lake" else "GraphWorld"
     ax.set(
-        title=f"TD control convergence on {env_label}",
+        title="TD control convergence on Branching Risk",
         xlabel="Training episode",
         ylabel="MSE of learned V against planner V",
     )

@@ -11,7 +11,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from graph_world import GraphWorldEnv, _compile_P, _validate_graph_spec, load_graph_spec, make_graph_world
+from graph_world import GraphWorldEnv, _validate_graph_spec, make_graph_world
 from bettermdptools.algorithms.planner import Planner
 
 SPEC = {
@@ -142,41 +142,28 @@ check(V[2] == 0.0, f"planner V[loss] == 0.0, got {V[2]}")
 
 env.close()
 
-# ── risk_vs_delay graph ─────────────────────────────────
+# ── branching_risk graph ─────────────────────────────────
 
-spec = load_graph_spec("graphs/risk_vs_delay.json")
-check(spec["name"] == "risk_vs_delay", "risk_vs_delay loads")
+env, values = make_graph_world("graphs/branching_risk.json", gamma=0.95)
+check(env.n_states == 14, f"branching_risk has 14 states, got {env.n_states}")
+check(env.n_actions == 3, f"branching_risk has 3 actions, got {env.n_actions}")
+check(abs(values[env.state_index("start")] - 42.86875) < 0.01, "branching_risk start value")
 
-env2, V2 = make_graph_world("graphs/risk_vs_delay.json", gamma=0.95)
-check(len(V2) == 4, f"4 states, got {len(V2)}")
-check(V2[2] == 0.0 and V2[3] == 0.0, "terminal states have V=0")
-check(env2.terminal_states()[2], "state 2 (goal) is terminal")
-check(env2.terminal_states()[3], "state 3 (loss) is terminal")
-check(not env2.terminal_states()[0], "state 0 (start) is not terminal")
-env2.close()
+policy = []
+for state in range(env.n_states):
+    action_values = [
+        sum(
+            probability * (reward + (0.0 if done else 0.95 * values[next_state]))
+            for probability, next_state, reward, done in env.P[state][action]
+        )
+        for action in range(env.n_actions)
+    ]
+    policy.append(int(np.argmax(action_values)))
 
-# optimal policy at gamma=0.95: safe (Q_safe = 9.5 > Q_risky = 7.6)
-env3, V3 = make_graph_world("graphs/risk_vs_delay.json", gamma=0.95)
-P3 = env3.P
-Q = np.zeros((env3.n_states, env3.n_actions))
-for s in range(env3.n_states):
-    for a in range(env3.n_actions):
-        for prob, ns, r, done in P3[s][a]:
-            Q[s, a] += prob * (r + (0.0 if done else 0.95 * V3[ns]))
-optimal_start = np.argmax(Q[0])
-check(optimal_start == 0, f"optimal at start is safe(0), got {optimal_start}")
-env3.close()
-
-# offline policy at gamma=0.70: risky (Q_safe = 7.0 < Q_risky = 7.6)
-env4, V4 = make_graph_world("graphs/risk_vs_delay.json", gamma=0.70)
-Q = np.zeros((env4.n_states, env4.n_actions))
-for s in range(env4.n_states):
-    for a in range(env4.n_actions):
-        for prob, ns, r, done in env4.P[s][a]:
-            Q[s, a] += prob * (r + (0.0 if done else 0.70 * V4[ns]))
-optimal_start = np.argmax(Q[0])
-check(optimal_start == 1, f"optimal at start is risky(1), got {optimal_start}")
-env4.close()
+check(policy[env.state_index("start")] == env.action_index("c"), "start selects branch 3")
+for state_name in ("b2_l1", "b2_l2", "b3_l1", "b3_l2", "b3_l3"):
+    check(policy[env.state_index(state_name)] == env.action_index("a"), f"{state_name} advances with A")
+env.close()
 
 # ── summary ─────────────────────────────────────────────
 

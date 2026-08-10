@@ -9,116 +9,268 @@
     "b": {
       "label": "B",
       "key": "b"
+    },
+    "c": {
+      "label": "C",
+      "key": "c"
     }
   },
   "states": {
     "start": {
       "label": "Start",
-      "position": [0.22, 0.15],
+      "position": [
+        0.4201,
+        0.08
+      ],
       "actions": {
         "a": [
-          {"probability": 1.0, "next_state": "b1_win", "reward": 5.0, "terminated": true}
+          {
+            "probability": 1.0,
+            "next_state": "b1_win",
+            "reward": 5.0,
+            "terminated": true
+          }
         ],
         "b": [
-          {"probability": 1.0, "next_state": "b_entry", "reward": 0.0}
-        ]
-      }
-    },
-    "b_entry": {
-      "label": "Entry",
-      "position": [0.42, 0.15],
-      "actions": {
-        "a": [
-          {"probability": 1.0, "next_state": "b2_l1", "reward": 0.0}
+          {
+            "probability": 1.0,
+            "next_state": "b2_l1",
+            "reward": 0.0
+          }
         ],
-        "b": [
-          {"probability": 1.0, "next_state": "b3_l1", "reward": 0.0}
+        "c": [
+          {
+            "probability": 1.0,
+            "next_state": "b3_l1",
+            "reward": 0.0
+          }
         ]
       }
-    },
-    "b1_win": {
-      "label": "B1: +5",
-      "position": [0.08, 0.15],
-      "terminal": true
     },
     "b2_l1": {
       "label": "B2 L1",
-      "position": [0.28, 0.38],
+      "position": [
+        0.3798,
+        0.29
+      ],
       "actions": {
         "a": [
-          {"probability": 1.0, "next_state": "b2_l2", "reward": 0.0}
+          {
+            "probability": 1.0,
+            "next_state": "b2_l2",
+            "reward": 0.0
+          }
         ],
         "b": [
-          {"probability": 1.0, "next_state": "b2_lose", "reward": -10.0, "terminated": true}
+          {
+            "probability": 1.0,
+            "next_state": "b2_lose_l1",
+            "reward": -10.0,
+            "terminated": true
+          }
+        ],
+        "c": [
+          {
+            "probability": 1.0,
+            "next_state": "b2_lose_l1",
+            "reward": -10.0,
+            "terminated": true
+          }
         ]
       }
     },
     "b2_l2": {
       "label": "B2 L2",
-      "position": [0.28, 0.60],
+      "position": [
+        0.1658,
+        0.5
+      ],
       "actions": {
         "a": [
-          {"probability": 1.0, "next_state": "b2_win", "reward": 20.0, "terminated": true}
+          {
+            "probability": 1.0,
+            "next_state": "b2_win",
+            "reward": 20.0,
+            "terminated": true
+          }
         ],
         "b": [
-          {"probability": 1.0, "next_state": "b2_lose", "reward": -10.0, "terminated": true}
+          {
+            "probability": 1.0,
+            "next_state": "b2_lose_l2",
+            "reward": -10.0,
+            "terminated": true
+          }
+        ],
+        "c": [
+          {
+            "probability": 1.0,
+            "next_state": "b2_lose_l2",
+            "reward": -10.0,
+            "terminated": true
+          }
         ]
       }
     },
-    "b2_win": {
-      "label": "B2: +20",
-      "position": [0.08, 0.78],
-      "terminal": true
-    },
-    "b2_lose": {
-      "label": "B2: -10",
-      "position": [0.12, 0.60],
-      "terminal": true
-    },
     "b3_l1": {
       "label": "B3 L1",
-      "position": [0.58, 0.38],
+      "position": [
+        0.8049,
+        0.29
+      ],
       "actions": {
         "a": [
-          {"probability": 1.0, "next_state": "b3_l2", "reward": 0.0}
+          {
+            "probability": 1.0,
+            "next_state": "b3_l2",
+            "reward": 0.0
+          }
         ],
         "b": [
-          {"probability": 1.0, "next_state": "b3_lose", "reward": -15.0, "terminated": true}
+          {
+            "probability": 1.0,
+            "next_state": "b3_lose_l1",
+            "reward": -15.0,
+            "terminated": true
+          }
+        ],
+        "c": [
+          {
+            "probability": 1.0,
+            "next_state": "b3_lose_l1",
+            "reward": -15.0,
+            "terminated": true
+          }
         ]
       }
     },
     "b3_l2": {
       "label": "B3 L2",
-      "position": [0.58, 0.60],
+      "position": [
+        0.7091,
+        0.5
+      ],
       "actions": {
         "a": [
-          {"probability": 1.0, "next_state": "b3_l3", "reward": 0.0}
+          {
+            "probability": 1.0,
+            "next_state": "b3_l3",
+            "reward": 0.0
+          }
         ],
         "b": [
-          {"probability": 1.0, "next_state": "b3_lose", "reward": -15.0, "terminated": true}
+          {
+            "probability": 1.0,
+            "next_state": "b3_lose_l2",
+            "reward": -15.0,
+            "terminated": true
+          }
+        ],
+        "c": [
+          {
+            "probability": 1.0,
+            "next_state": "b3_lose_l2",
+            "reward": -15.0,
+            "terminated": true
+          }
         ]
       }
     },
     "b3_l3": {
       "label": "B3 L3",
-      "position": [0.58, 0.78],
+      "position": [
+        0.6243,
+        0.71
+      ],
       "actions": {
         "a": [
-          {"probability": 1.0, "next_state": "b3_win", "reward": 50.0, "terminated": true}
+          {
+            "probability": 1.0,
+            "next_state": "b3_win",
+            "reward": 50.0,
+            "terminated": true
+          }
         ],
         "b": [
-          {"probability": 1.0, "next_state": "b3_lose", "reward": -15.0, "terminated": true}
+          {
+            "probability": 1.0,
+            "next_state": "b3_lose_l3",
+            "reward": -15.0,
+            "terminated": true
+          }
+        ],
+        "c": [
+          {
+            "probability": 1.0,
+            "next_state": "b3_lose_l3",
+            "reward": -15.0,
+            "terminated": true
+          }
         ]
       }
     },
-    "b3_win": {
-      "label": "B3: +50",
-      "position": [0.78, 0.90],
+    "b1_win": {
+      "label": "B1: +5",
+      "position": [
+        0.0657,
+        0.29
+      ],
       "terminal": true
     },
-    "b3_lose": {
-      "label": "B3: -15",
-      "position": [0.72, 0.60],
+    "b2_lose_l1": {
+      "label": "B2 L1: -10",
+      "position": [
+        0.4269,
+        0.5
+      ],
+      "terminal": true
+    },
+    "b2_win": {
+      "label": "B2: +20",
+      "position": [
+        0.0766,
+        0.71
+      ],
+      "terminal": true
+    },
+    "b2_lose_l2": {
+      "label": "B2 L2: -10",
+      "position": [
+        0.3261,
+        0.71
+      ],
+      "terminal": true
+    },
+    "b3_lose_l1": {
+      "label": "B3 L1: -15",
+      "position": [
+        0.95,
+        0.5
+      ],
+      "terminal": true
+    },
+    "b3_lose_l2": {
+      "label": "B3 L2: -15",
+      "position": [
+        0.8931,
+        0.71
+      ],
+      "terminal": true
+    },
+    "b3_win": {
+      "label": "B3: +50",
+      "position": [
+        0.4751,
+        0.92
+      ],
+      "terminal": true
+    },
+    "b3_lose_l3": {
+      "label": "B3 L3: -15",
+      "position": [
+        0.7501,
+        0.92
+      ],
       "terminal": true
     }
   }
