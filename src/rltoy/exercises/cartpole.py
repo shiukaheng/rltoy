@@ -8,18 +8,25 @@ import gymnasium as gym
 import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtWidgets
+import random
 
 
 # === YOUR POLICY STARTS HERE ===
 # Replace this random baseline with your action-selection rule. For SARSA, this
 # is where an epsilon-greedy choice from your Q-table would go.
 
-def choose_action(observation: np.ndarray, action_count: int, rng: np.random.Generator) -> int:
-    """Choose an action. Replace this random baseline with your policy."""
-    print(observation)
-    del observation
-    return int(rng.integers(action_count))
+"""
+IMPLEMENTATION
+We will do SARSA
+We will quantize the state space into 6 segments
+And output two discrete actions
 
+SARSA loop:
+- init Q
+"""
+
+q = np.zeros((6, 2))
+EPSILON = 0.2
 
 def run_episode(
     env: gym.Env,
@@ -50,7 +57,8 @@ def run_episode(
         action: [move]
         domain:  [0|1] (0=left, 1=right)
         """
-        action = choose_action(observation, env.action_space.n, rng)
+
+        action = policy_learning(observation, env.action_space.n, rng)
         next_observation, reward, terminated, truncated, _ = env.step(action)
         episode_return += reward
         if on_step is not None:
@@ -60,13 +68,23 @@ def run_episode(
             return episode_return
         observation = next_observation
 
+def learning_policy(sn):
+    if random.uniform() > EPSILON:
+        return int(np.argmax(q[sn]))
+    else:
+        return int(np.array(random.uniform() > EPSILON))
 
-def train(episodes: int, rng: np.random.Generator, seed: int | None) -> np.ndarray:
+def train(episodes: int) -> np.ndarray:
     """Run episodes here; add policy setup such as a Q-table before this loop."""
     env = gym.make("CartPole-v1")
     try:
-        returns = np.empty(episodes)
         for episode in range(episodes):
+            t = 0
+            sn, _ = env.reset()
+            while True:
+                an = learning_policy(sn)
+                snp1, rnp1, term, trunc = env.step(an)
+                td_target = 
             returns[episode] = run_episode(env, rng, seed if episode == 0 else None)
         return returns
     finally:
