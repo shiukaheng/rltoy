@@ -20,10 +20,14 @@ def choose_action(observation: np.ndarray, action_count: int, rng: np.random.Gen
 
 
 def run_episode(
-    env: gym.Env, rng: np.random.Generator, seed: int | None = None
+    env: gym.Env,
+    rng: np.random.Generator,
+    seed: int | None = None,
+    on_step: Callable[[int, float], None] | None = None,
 ) -> float:
     observation, _ = env.reset(seed=seed)
     episode_return = 0.0
+    step = 0
 
     while True:
         # === YOUR LEARNING LOOP ===
@@ -33,28 +37,38 @@ def run_episode(
         action = choose_action(observation, env.action_space.n, rng)
         next_observation, reward, terminated, truncated, _ = env.step(action)
         episode_return += reward
+        if on_step is not None:
+            on_step(step, episode_return)
+        step += 1
         if terminated or truncated:
             return episode_return
         observation = next_observation
 
 
-def train(
-    episodes: int,
-    rng: np.random.Generator,
-    seed: int | None,
-    on_episode: Callable[[int, float], None] | None = None,
-) -> np.ndarray:
+def train(episodes: int, rng: np.random.Generator, seed: int | None) -> np.ndarray:
     """Run episodes here; add policy setup such as a Q-table before this loop."""
     env = gym.make("CartPole-v1")
     try:
         returns = np.empty(episodes)
         for episode in range(episodes):
             returns[episode] = run_episode(env, rng, seed if episode == 0 else None)
-            if on_episode is not None:
-                on_episode(episode, returns[episode])
         return returns
     finally:
         env.close()
+
+
+def make_reward_plot(title: str):
+    # === SAFE TO IGNORE ===
+    # Live plot of cumulative reward within the current inference episode.
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    plot = pg.PlotWidget(title=title)
+    plot.setBackground("#16122e")
+    plot.setLabel("bottom", "Step")
+    plot.setLabel("left", "Cumulative reward")
+    plot.showGrid(x=True, y=True, alpha=0.3)
+    curve = plot.plot([], [], pen=pg.mkPen("#fca434", width=2))
+    plot.show()
+    return app, plot, curve
 
 
 def show_policy(
@@ -63,42 +77,34 @@ def show_policy(
     seed: int | None,
     loop: bool,
     terminal_pause_seconds: float,
-    on_episode: Callable[[int], None] | None = None,
 ) -> None:
     # === SAFE TO IGNORE ===
     # This is only display code. It calls the same policy as training and
     # continuously restarts after failure so you can watch it. No learning
-    # happens here.
+    # happens here. The plot shows cumulative reward within each episode.
     """Play the final policy using Gymnasium's human renderer."""
+    app, plot, curve = make_reward_plot("CartPole Cumulative Reward")
     env = gym.make("CartPole-v1", render_mode="human")
     try:
         episode = 0
         while loop or episode < episodes:
-            run_episode(env, rng, seed if episode == 0 else None)
-            if on_episode is not None:
-                on_episode(episode)
+            xs: list[int] = []
+            ys: list[float] = []
+
+            def track(step: int, cumulative: float) -> None:
+                xs.append(step)
+                ys.append(cumulative)
+                curve.setData(xs, ys)
+                app.processEvents()
+
+            run_episode(env, rng, seed if episode == 0 else None, on_step=track)
             episode += 1
             time.sleep(terminal_pause_seconds)
     except KeyboardInterrupt:
         pass
     finally:
         env.close()
-
-
-def make_learning_curve(title: str):
-    # === SAFE TO IGNORE ===
-    # Live learning-curve window. The curve grows during training and a marker
-    # tracks the episode being replayed.
-    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
-    plot = pg.PlotWidget(title=title)
-    plot.setBackground("#16122e")
-    plot.setLabel("bottom", "Episode")
-    plot.setLabel("left", "Return")
-    plot.showGrid(x=True, y=True, alpha=0.3)
-    curve = plot.plot([], [], pen=pg.mkPen("#fca434", width=2))
-    marker = plot.plot([], [], pen=None, symbol="o", symbolSize=12, symbolBrush="#e65338")
-    plot.show()
-    return app, plot, curve, marker
+        plot.close()
 
 
 def main() -> None:
@@ -120,38 +126,16 @@ def main() -> None:
         parser.error("--terminal-pause-seconds must be non-negative")
 
     rng = np.random.default_rng(args.seed)
-
+    returns = train(args.episodes, rng, args.seed)
+    print(f"Mean return: {returns.mean():.1f}; final return: {returns[-1]:.1f}")
     if args.render_episodes:
-        app, plot, curve, marker = make_learning_curve("CartPole Learning Curve")
-        xs: list[int] = []
-        ys: list[float] = []
-
-        def grow_curve(episode: int, episode_return: float) -> None:
-            xs.append(episode)
-            ys.append(episode_return)
-            curve.setData(xs, ys)
-            app.processEvents()
-
-        returns = train(args.episodes, rng, args.seed, on_episode=grow_curve)
-
-        def move_marker(episode: int) -> None:
-            idx = episode % len(returns)
-            marker.setData([idx], [returns[idx]])
-            app.processEvents()
-
         show_policy(
             args.render_episodes,
             rng,
             args.seed,
             loop=not args.no_loop,
             terminal_pause_seconds=args.terminal_pause_seconds,
-            on_episode=move_marker,
         )
-        plot.close()
-    else:
-        returns = train(args.episodes, rng, args.seed)
-
-    print(f"Mean return: {returns.mean():.1f}; final return: {returns[-1]:.1f}")
 
 
 if __name__ == "__main__":
