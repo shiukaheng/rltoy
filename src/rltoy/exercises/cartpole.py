@@ -13,8 +13,10 @@ from pyqtgraph.Qt import QtWidgets
 # === YOUR POLICY STARTS HERE ===
 # Replace this random baseline with your action-selection rule. For SARSA, this
 # is where an epsilon-greedy choice from your Q-table would go.
+
 def choose_action(observation: np.ndarray, action_count: int, rng: np.random.Generator) -> int:
     """Choose an action. Replace this random baseline with your policy."""
+    print(observation)
     del observation
     return int(rng.integers(action_count))
 
@@ -34,6 +36,20 @@ def run_episode(
         # `observation`, `action`, `reward`, and the next `observation` are the
         # transition available for a SARSA update. Add state discretization,
         # Q-table updates, and any extra bookkeeping here.
+
+        """
+        OBSERVATION PROFILE
+        ndarray: (4, )
+        observations: [cart pos, vel, angle,   angular vel] (episodes terminate if cart leaves +-2.4)
+        domain:  [+-4.8.  , -  , +-0.418, -]
+        """
+
+        """
+        ACTION PROFILE
+        ndarray: (1, )
+        action: [move]
+        domain:  [0|1] (0=left, 1=right)
+        """
         action = choose_action(observation, env.action_space.n, rng)
         next_observation, reward, terminated, truncated, _ = env.step(action)
         episode_return += reward
