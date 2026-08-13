@@ -259,6 +259,9 @@ wheels = [
 ]
 
 [package.optional-dependencies]
+classic-control = [
+    { name = "pygame" },
+]
 toy-text = [
     { name = "pygame" },
 ]
@@ -878,7 +881,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "bettermdptools" },
-    { name = "gymnasium", extra = ["toy-text"] },
+    { name = "gymnasium", extra = ["classic-control", "toy-text"] },
     { name = "matplotlib" },
     { name = "pygame" },
     { name = "torch" },
@@ -893,7 +896,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "bettermdptools", specifier = ">=0.8.6" },
-    { name = "gymnasium", extras = ["toy-text"], specifier = ">=0.26.3" },
+    { name = "gymnasium", extras = ["classic-control", "toy-text"], specifier = ">=0.26.3" },
     { name = "matplotlib", specifier = ">=3.11.1" },
     { name = "pygame", specifier = ">=2.6.1" },
     { name = "torch", specifier = ">=2.13.0" },

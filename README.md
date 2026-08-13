@@ -97,6 +97,16 @@ A graph needs `start_state`, `actions`, and `states`. Every nonterminal state mu
 
 The tabular learners require finite `gym.spaces.Discrete` observations and actions. The neural learners currently use one-hot encodings of the same discrete state space. Wrap continuing environments with Gymnasium's `TimeLimit`; do not add a project-specific step-limit API.
 
+## Hands-On Exercises
+
+`cartpole.py` is a single-file CartPole baseline intended to be modified directly. It starts with a random policy, trains for the requested number of episodes, then continuously replays the policy in Gymnasium's human renderer. Press `Ctrl-C` to close it:
+
+```bash
+uv run src/rltoy/exercises/cartpole.py --episodes 100
+```
+
+An episode ends when the cart exits the track, the pole exceeds a 12-degree tilt, or it reaches 500 steps. The renderer holds the terminal frame for one second before restarting. Replace `choose_action` and add updates to `train` as you experiment. For a non-interactive run, use `--render-episodes 0`; use `--no-loop` to show only the requested number of episodes.
+
 ## Experiment Safely
 
 The intended way to explore an algorithm is to copy its file and edit it:

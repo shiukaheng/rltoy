@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "bettermdptools>=0.8.6",
-    "gymnasium[toy-text]>=0.26.3",
+    "gymnasium[classic-control,toy-text]>=0.26.3",
     "matplotlib>=3.11.1",
     "pygame>=2.6.1",
     "torch>=2.13.0",
