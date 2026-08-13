@@ -105,7 +105,7 @@ The tabular learners require finite `gym.spaces.Discrete` observations and actio
 uv run src/rltoy/exercises/cartpole.py --episodes 100
 ```
 
-An episode ends when the cart exits the track, the pole exceeds a 12-degree tilt, or it reaches 500 steps. The renderer holds the terminal frame for one second before restarting. Replace `choose_action` and add updates to `train` as you experiment. For a non-interactive run, use `--render-episodes 0`; use `--no-loop` to show only the requested number of episodes.
+An episode ends when the cart exits the track, the pole exceeds a 12-degree tilt, or it reaches 500 steps. The renderer holds the terminal frame for one second before restarting. Replace `choose_action` and add updates to `train` as you experiment. For a non-interactive run, use `--render-episodes 0`; use `--no-loop` to show only the requested number of episodes. Both exercises also open a pyqtgraph learning-curve window: the return curve grows live during training and a marker tracks the episode being replayed.
 
 `puckworld.py` provides the same editable structure for a small two-dimensional navigation task. The puck has five discrete actions: move left, right, up, down, or coast. Reach green targets with the blue puck:
 

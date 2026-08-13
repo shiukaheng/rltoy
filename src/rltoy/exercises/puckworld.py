@@ -2,10 +2,13 @@
 
 import argparse
 import time
+from collections.abc import Callable
 
 import gymnasium as gym
 import numpy as np
 import pygame
+import pyqtgraph as pg
+from pyqtgraph.Qt import QtWidgets
 
 
 class PuckWorld(gym.Env):
@@ -105,7 +108,11 @@ def run_episode(env: PuckWorld, rng: np.random.Generator, seed: int | None = Non
 
 
 def train(
-    episodes: int, rng: np.random.Generator, seed: int | None, steps_per_episode: int
+    episodes: int,
+    rng: np.random.Generator,
+    seed: int | None,
+    steps_per_episode: int,
+    on_episode: Callable[[int, float], None] | None = None,
 ) -> np.ndarray:
     """Run episodes here; add policy setup such as a Q-table before this loop."""
     env = PuckWorld(max_steps=steps_per_episode)
@@ -113,6 +120,8 @@ def train(
         returns = np.empty(episodes)
         for episode in range(episodes):
             returns[episode] = run_episode(env, rng, seed if episode == 0 else None)
+            if on_episode is not None:
+                on_episode(episode, returns[episode])
         return returns
     finally:
         env.close()
@@ -125,6 +134,7 @@ def show_policy(
     loop: bool,
     terminal_pause_seconds: float,
     steps_per_episode: int,
+    on_episode: Callable[[int], None] | None = None,
 ) -> None:
     # === SAFE TO IGNORE ===
     # This is display code only. It calls the same policy as training and
@@ -134,12 +144,30 @@ def show_policy(
         episode = 0
         while loop or episode < episodes:
             run_episode(env, rng, seed if episode == 0 else None)
+            if on_episode is not None:
+                on_episode(episode)
             episode += 1
             time.sleep(terminal_pause_seconds)
     except KeyboardInterrupt:
         pass
     finally:
         env.close()
+
+
+def make_learning_curve(title: str):
+    # === SAFE TO IGNORE ===
+    # Live learning-curve window. The curve grows during training and a marker
+    # tracks the episode being replayed.
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    plot = pg.PlotWidget(title=title)
+    plot.setBackground("#16122e")
+    plot.setLabel("bottom", "Episode")
+    plot.setLabel("left", "Return")
+    plot.showGrid(x=True, y=True, alpha=0.3)
+    curve = plot.plot([], [], pen=pg.mkPen("#fca434", width=2))
+    marker = plot.plot([], [], pen=None, symbol="o", symbolSize=12, symbolBrush="#e65338")
+    plot.show()
+    return app, plot, curve, marker
 
 
 def main() -> None:
@@ -164,9 +192,27 @@ def main() -> None:
         parser.error("--terminal-pause-seconds must be non-negative")
 
     rng = np.random.default_rng(args.seed)
-    returns = train(args.episodes, rng, args.seed, args.steps_per_episode)
-    print(f"Mean return: {returns.mean():.2f}; final return: {returns[-1]:.2f}")
+
     if args.render_episodes:
+        app, plot, curve, marker = make_learning_curve("PuckWorld Learning Curve")
+        xs: list[int] = []
+        ys: list[float] = []
+
+        def grow_curve(episode: int, episode_return: float) -> None:
+            xs.append(episode)
+            ys.append(episode_return)
+            curve.setData(xs, ys)
+            app.processEvents()
+
+        returns = train(
+            args.episodes, rng, args.seed, args.steps_per_episode, on_episode=grow_curve
+        )
+
+        def move_marker(episode: int) -> None:
+            idx = episode % len(returns)
+            marker.setData([idx], [returns[idx]])
+            app.processEvents()
+
         show_policy(
             args.render_episodes,
             rng,
@@ -174,7 +220,13 @@ def main() -> None:
             loop=not args.no_loop,
             terminal_pause_seconds=args.terminal_pause_seconds,
             steps_per_episode=args.steps_per_episode,
+            on_episode=move_marker,
         )
+        plot.close()
+    else:
+        returns = train(args.episodes, rng, args.seed, args.steps_per_episode)
+
+    print(f"Mean return: {returns.mean():.2f}; final return: {returns[-1]:.2f}")
 
 
 if __name__ == "__main__":

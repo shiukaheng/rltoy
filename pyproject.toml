@@ -9,6 +9,8 @@ dependencies = [
     "gymnasium[classic-control,toy-text]>=0.26.3",
     "matplotlib>=3.11.1",
     "pygame>=2.6.1",
+    "pyqt6>=6.11.0",
+    "pyqtgraph>=0.14.0",
     "torch>=2.13.0",
     "tyro>=1.0.15",
 ]
