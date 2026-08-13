@@ -62,16 +62,16 @@ def generalized_advantages(
     terminated: bool,
 ) -> np.ndarray:
     """Compute GAE from one completed trajectory and an optional bootstrap value."""
-    advantages = np.zeros(len(rewards))
-    future_advantage = 0.0
-    for step in range(len(rewards) - 1, -1, -1):
-        is_final_step = step == len(rewards) - 1
-        next_value = bootstrap_value if is_final_step else values[step + 1]
-        bootstrap = 0.0 if is_final_step and terminated else 1.0
-        continuation = 0.0 if is_final_step else 1.0
-        td_error = rewards[step] + gamma * bootstrap * next_value - values[step]
-        future_advantage = td_error + gamma * gae_lambda * continuation * future_advantage
-        advantages[step] = future_advantage
+    advantages = np.zeros(len(rewards))  # Allocate one advantage estimate for every trajectory step.
+    future_advantage = 0.0  # There is no advantage beyond the trajectory end.
+    for step in range(len(rewards) - 1, -1, -1):  # Apply the GAE recursion from the end of the trajectory.
+        is_final_step = step == len(rewards) - 1  # Identify the boundary where a bootstrap may be needed.
+        next_value = bootstrap_value if is_final_step else values[step + 1]  # Use V(s_{t+1}) from the trajectory or its final bootstrap.
+        bootstrap = 0.0 if is_final_step and terminated else 1.0  # Do not bootstrap beyond a true terminal state.
+        continuation = 0.0 if is_final_step else 1.0  # Stop the advantage recursion at the trajectory boundary.
+        td_error = rewards[step] + gamma * bootstrap * next_value - values[step]  # Compute the one-step TD residual.
+        future_advantage = td_error + gamma * gae_lambda * continuation * future_advantage  # Mix this residual with later residuals.
+        advantages[step] = future_advantage  # Save A^GAE_t for the current action.
     return advantages
 
 
@@ -90,64 +90,64 @@ def train(
         raise ValueError("GAE currently requires a discrete action space")
 
     if seed is not None:
-        torch.manual_seed(seed)
-    device = torch.device(config.device)
-    states, actions = env.observation_space.n, env.action_space.n
-    policy = PolicyNetwork(states, actions, config.hidden_units).to(device)
-    value = ValueNetwork(states, config.hidden_units).to(device)
-    policy_optimizer = torch.optim.Adam(policy.parameters(), lr=config.policy_learning_rate)
-    value_optimizer = torch.optim.Adam(value.parameters(), lr=config.value_learning_rate)
-    episode_returns = np.zeros(config.episodes)
-    value_history = np.zeros((config.episodes, states))
+        torch.manual_seed(seed)  # Make network initialization and action samples reproducible.
+    device = torch.device(config.device)  # Place network computations on the requested device.
+    states, actions = env.observation_space.n, env.action_space.n  # Read the one-hot input and action-output dimensions.
+    policy = PolicyNetwork(states, actions, config.hidden_units).to(device)  # Create the stochastic actor.
+    value = ValueNetwork(states, config.hidden_units).to(device)  # Create the state-value baseline.
+    policy_optimizer = torch.optim.Adam(policy.parameters(), lr=config.policy_learning_rate)  # Optimize the actor separately.
+    value_optimizer = torch.optim.Adam(value.parameters(), lr=config.value_learning_rate)  # Optimize the baseline separately.
+    episode_returns = np.zeros(config.episodes)  # Reserve one observed return for each episode.
+    value_history = np.zeros((config.episodes, states))  # Record the critic's estimate for every state.
 
-    for episode in range(config.episodes):
-        state, _ = env.reset(seed=seed if episode == 0 else None)
-        trajectory = [state]
-        visited_states = []
-        rewards = []
-        log_probabilities = []
+    for episode in range(config.episodes):  # Collect a trajectory, then update both networks once.
+        state, _ = env.reset(seed=seed if episode == 0 else None)  # Begin a new episode, seeding only the first reset.
+        trajectory = [state]  # Track visited states for the optional observer.
+        visited_states = []  # Keep states aligned with sampled actions and rewards.
+        rewards = []  # Keep rewards for the later GAE calculation.
+        log_probabilities = []  # Keep differentiable log probabilities of sampled actions.
 
         while True:
-            logits = policy(one_hot(np.asarray([state]), states, device))[0]
-            distribution = torch.distributions.Categorical(logits=logits)
-            action = distribution.sample()
-            next_state, reward, terminated, truncated, _ = env.step(action.item())
-            visited_states.append(state)
-            rewards.append(reward)
-            log_probabilities.append(distribution.log_prob(action))
-            trajectory.append(next_state)
+            logits = policy(one_hot(np.asarray([state]), states, device))[0]  # Produce unnormalized action preferences for this state.
+            distribution = torch.distributions.Categorical(logits=logits)  # Turn preferences into a categorical policy.
+            action = distribution.sample()  # Sample an action from the current policy.
+            next_state, reward, terminated, truncated, _ = env.step(action.item())  # Sample the environment transition.
+            visited_states.append(state)  # Retain the state whose action received this reward.
+            rewards.append(reward)  # Retain the reward for the GAE recursion.
+            log_probabilities.append(distribution.log_prob(action))  # Retain the score-function term for this action.
+            trajectory.append(next_state)  # Extend the recorded state path.
             if terminated or truncated:
                 break
-            state = next_state
+            state = next_state  # Continue from the sampled successor state.
 
-        with torch.no_grad():
-            visited = one_hot(np.asarray(visited_states), states, device)
-            old_values = value(visited).cpu().numpy()
+        with torch.no_grad():  # Treat values used to construct targets as fixed estimates.
+            visited = one_hot(np.asarray(visited_states), states, device)  # Encode the trajectory states in one batch.
+            old_values = value(visited).cpu().numpy()  # Estimate V(s_t) for every trajectory step.
             bootstrap_value = 0.0 if terminated else value(
                 one_hot(np.asarray([next_state]), states, device)
-            ).item()
+            ).item()  # Bootstrap a truncation from V(s_T), but not a true terminal state.
         advantages = generalized_advantages(
             rewards, old_values, bootstrap_value, config.gamma, config.gae_lambda, terminated
-        )
-        returns_to_go = advantages + old_values
-        advantages_tensor = torch.as_tensor(advantages, dtype=torch.float32, device=device)
-        returns_tensor = torch.as_tensor(returns_to_go, dtype=torch.float32, device=device)
-        policy_loss = -(torch.stack(log_probabilities) * advantages_tensor).sum()
-        value_loss = torch.nn.functional.mse_loss(value(visited), returns_tensor)
+        )  # Combine TD residuals into the trajectory's GAE advantages.
+        returns_to_go = advantages + old_values  # Convert advantages into value-regression targets.
+        advantages_tensor = torch.as_tensor(advantages, dtype=torch.float32, device=device)  # Move fixed advantages into the actor loss.
+        returns_tensor = torch.as_tensor(returns_to_go, dtype=torch.float32, device=device)  # Move fixed return targets into the critic loss.
+        policy_loss = -(torch.stack(log_probabilities) * advantages_tensor).sum()  # Increase action likelihood in proportion to GAE advantage.
+        value_loss = torch.nn.functional.mse_loss(value(visited), returns_tensor)  # Train the critic to fit GAE return targets.
 
-        policy_optimizer.zero_grad()
-        policy_loss.backward()
-        policy_optimizer.step()
-        value_optimizer.zero_grad()
-        value_loss.backward()
-        value_optimizer.step()
+        policy_optimizer.zero_grad()  # Clear actor gradients from the previous trajectory.
+        policy_loss.backward()  # Differentiate the GAE policy-gradient objective.
+        policy_optimizer.step()  # Update the policy.
+        value_optimizer.zero_grad()  # Clear critic gradients from the previous trajectory.
+        value_loss.backward()  # Differentiate the value regression loss.
+        value_optimizer.step()  # Update the state-value baseline.
 
-        with torch.no_grad():
-            all_states = one_hot(np.arange(states), states, device)
-            probabilities = torch.softmax(policy(all_states), dim=1).cpu().numpy()
-            estimated_values = value(all_states).cpu().numpy()
-        episode_returns[episode] = sum(rewards)
-        value_history[episode] = estimated_values
+        with torch.no_grad():  # Reporting values and probabilities does not need an autograd graph.
+            all_states = one_hot(np.arange(states), states, device)  # Encode every state for a complete snapshot.
+            probabilities = torch.softmax(policy(all_states), dim=1).cpu().numpy()  # Evaluate pi(a | s) for every state.
+            estimated_values = value(all_states).cpu().numpy()  # Evaluate V(s) for every state.
+        episode_returns[episode] = sum(rewards)  # Store this episode's observed return.
+        value_history[episode] = estimated_values  # Store the critic's complete value snapshot.
         observer(
             TrainingSnapshot(
                 episode,

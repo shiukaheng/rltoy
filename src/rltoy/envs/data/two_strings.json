@@ -1,0 +1,31 @@
+{
+  "name": "two_strings",
+  "start_state": "start",
+  "actions": {
+    "a": {"label": "A", "key": "a"},
+    "b": {"label": "B", "key": "b"}
+  },
+  "states": {
+    "start": {"label": "Start", "position": [0.05, 0.5], "actions": {"a": [{"probability": 1.0, "next_state": "left_1", "reward": 0.0}], "b": [{"probability": 1.0, "next_state": "right_1", "reward": 0.0}]}},
+    "left_1": {"label": "L1", "position": [0.12, 0.8], "actions": {"a": [{"probability": 1.0, "next_state": "left_2", "reward": 0.0}], "b": [{"probability": 1.0, "next_state": "left_2", "reward": 0.0}]}},
+    "left_2": {"label": "L2", "position": [0.19, 0.8], "actions": {"a": [{"probability": 1.0, "next_state": "left_3", "reward": 0.0}], "b": [{"probability": 1.0, "next_state": "left_3", "reward": 0.0}]}},
+    "left_3": {"label": "L3", "position": [0.26, 0.8], "actions": {"a": [{"probability": 1.0, "next_state": "left_4", "reward": 0.0}], "b": [{"probability": 1.0, "next_state": "left_4", "reward": 0.0}]}},
+    "left_4": {"label": "L4", "position": [0.33, 0.8], "actions": {"a": [{"probability": 1.0, "next_state": "left_5", "reward": 0.0}], "b": [{"probability": 1.0, "next_state": "left_5", "reward": 0.0}]}},
+    "left_5": {"label": "L5", "position": [0.40, 0.8], "actions": {"a": [{"probability": 1.0, "next_state": "left_6", "reward": 0.0}], "b": [{"probability": 1.0, "next_state": "left_6", "reward": 0.0}]}},
+    "left_6": {"label": "L6", "position": [0.47, 0.8], "actions": {"a": [{"probability": 1.0, "next_state": "left_7", "reward": 0.0}], "b": [{"probability": 1.0, "next_state": "left_7", "reward": 0.0}]}},
+    "left_7": {"label": "L7", "position": [0.54, 0.8], "actions": {"a": [{"probability": 1.0, "next_state": "left_8", "reward": 0.0}], "b": [{"probability": 1.0, "next_state": "left_8", "reward": 0.0}]}},
+    "left_8": {"label": "L8", "position": [0.61, 0.8], "actions": {"a": [{"probability": 1.0, "next_state": "left_9", "reward": 0.0}], "b": [{"probability": 1.0, "next_state": "left_9", "reward": 0.0}]}},
+    "left_9": {"label": "L9", "position": [0.68, 0.8], "actions": {"a": [{"probability": 1.0, "next_state": "left_10", "reward": 100.0}], "b": [{"probability": 1.0, "next_state": "left_10", "reward": 100.0}]}},
+    "left_10": {"label": "+100", "position": [0.80, 0.8], "terminal": true, "display": {"color": "success"}},
+    "right_1": {"label": "R1", "position": [0.12, 0.2], "actions": {"a": [{"probability": 1.0, "next_state": "right_2", "reward": 0.0}], "b": [{"probability": 1.0, "next_state": "right_2", "reward": 0.0}]}},
+    "right_2": {"label": "R2", "position": [0.19, 0.2], "actions": {"a": [{"probability": 1.0, "next_state": "right_3", "reward": 0.0}], "b": [{"probability": 1.0, "next_state": "right_3", "reward": 0.0}]}},
+    "right_3": {"label": "R3", "position": [0.26, 0.2], "actions": {"a": [{"probability": 1.0, "next_state": "right_4", "reward": 0.0}], "b": [{"probability": 1.0, "next_state": "right_4", "reward": 0.0}]}},
+    "right_4": {"label": "R4", "position": [0.33, 0.2], "actions": {"a": [{"probability": 1.0, "next_state": "right_5", "reward": 0.0}], "b": [{"probability": 1.0, "next_state": "right_5", "reward": 0.0}]}},
+    "right_5": {"label": "R5", "position": [0.40, 0.2], "actions": {"a": [{"probability": 1.0, "next_state": "right_6", "reward": 0.0}], "b": [{"probability": 1.0, "next_state": "right_6", "reward": 0.0}]}},
+    "right_6": {"label": "R6", "position": [0.47, 0.2], "actions": {"a": [{"probability": 1.0, "next_state": "right_7", "reward": 0.0}], "b": [{"probability": 1.0, "next_state": "right_7", "reward": 0.0}]}},
+    "right_7": {"label": "R7", "position": [0.54, 0.2], "actions": {"a": [{"probability": 1.0, "next_state": "right_8", "reward": 0.0}], "b": [{"probability": 1.0, "next_state": "right_8", "reward": 0.0}]}},
+    "right_8": {"label": "R8", "position": [0.61, 0.2], "actions": {"a": [{"probability": 1.0, "next_state": "right_9", "reward": 0.0}], "b": [{"probability": 1.0, "next_state": "right_9", "reward": 0.0}]}},
+    "right_9": {"label": "R9", "position": [0.68, 0.2], "actions": {"a": [{"probability": 1.0, "next_state": "right_10", "reward": -100.0}], "b": [{"probability": 1.0, "next_state": "right_10", "reward": -100.0}]}},
+    "right_10": {"label": "-100", "position": [0.80, 0.2], "terminal": true, "display": {"color": "failure"}}
+  }
+}

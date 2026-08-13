@@ -178,4 +178,4 @@ def planner_values(env: GraphWorldEnv, gamma: float) -> np.ndarray:
 
 def make_branching_risk(**_: Any) -> GraphWorldEnv:
     """Gymnasium factory for the bundled Branching Risk environment."""
-    return GraphWorldEnv.from_json(Path(__file__).with_name("data") / "branching_risk.json")
+    return GraphWorldEnv.from_json(Path(__file__).with_name("data") / "two_strings.json")

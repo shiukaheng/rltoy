@@ -57,9 +57,9 @@ def test_json_loading_and_planner(tmp_path, one_step_spec):
 def test_bundled_graph_is_registered_with_gymnasium():
     env = gym.make("RLToy/BranchingRisk-v0")
     try:
-        assert env.observation_space.n == 10
-        assert env.action_space.n == 3
-        assert np.all(env.unwrapped.terminal_states()[-5:])
+        assert env.observation_space.n == 21
+        assert env.action_space.n == 2
+        assert np.all(env.unwrapped.terminal_states()[[10, 20]])
         state, _ = env.reset(seed=0)
         assert state == env.unwrapped.state_index("start")
     finally:

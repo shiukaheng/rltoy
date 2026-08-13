@@ -53,11 +53,11 @@ def one_hot(states: np.ndarray, state_count: int, device: torch.device) -> torch
 
 
 def discounted_returns(rewards: list[float], gamma: float) -> list[float]:
-    returns = [0.0] * len(rewards)
-    future_return = 0.0
-    for step in range(len(rewards) - 1, -1, -1):
-        future_return = rewards[step] + gamma * future_return
-        returns[step] = future_return
+    returns = [0.0] * len(rewards)  # Allocate one return-to-go for every sampled action.
+    future_return = 0.0  # The return after the terminal transition is zero.
+    for step in range(len(rewards) - 1, -1, -1):  # Work backward so each suffix return is already known.
+        future_return = rewards[step] + gamma * future_return  # Add this reward to the discounted future rewards.
+        returns[step] = future_return  # Save the return-to-go from this time step.
     return returns
 
 
@@ -74,56 +74,56 @@ def train(
         raise ValueError("REINFORCE with baseline currently requires a discrete action space")
 
     if seed is not None:
-        torch.manual_seed(seed)
-    device = torch.device(config.device)
-    states, actions = env.observation_space.n, env.action_space.n
-    policy = PolicyNetwork(states, actions, config.hidden_units).to(device)
-    value = ValueNetwork(states, config.hidden_units).to(device)
-    policy_optimizer = torch.optim.Adam(policy.parameters(), lr=config.policy_learning_rate)
-    value_optimizer = torch.optim.Adam(value.parameters(), lr=config.value_learning_rate)
-    episode_rewards = np.zeros(config.episodes)
-    value_history = np.zeros((config.episodes, states))
+        torch.manual_seed(seed)  # Make network initialization and action samples reproducible.
+    device = torch.device(config.device)  # Place network computations on the requested device.
+    states, actions = env.observation_space.n, env.action_space.n  # Read the one-hot input and action-output dimensions.
+    policy = PolicyNetwork(states, actions, config.hidden_units).to(device)  # Create the stochastic actor.
+    value = ValueNetwork(states, config.hidden_units).to(device)  # Create the state-value baseline.
+    policy_optimizer = torch.optim.Adam(policy.parameters(), lr=config.policy_learning_rate)  # Optimize the actor separately.
+    value_optimizer = torch.optim.Adam(value.parameters(), lr=config.value_learning_rate)  # Optimize the baseline separately.
+    episode_rewards = np.zeros(config.episodes)  # Reserve one observed return for each episode.
+    value_history = np.zeros((config.episodes, states))  # Record the critic's estimate for every state.
 
-    for episode in range(config.episodes):
-        state, _ = env.reset(seed=seed if episode == 0 else None)
-        trajectory = [state]
-        visited_states = []
-        rewards = []
-        log_probabilities = []
+    for episode in range(config.episodes):  # Collect and learn from one complete policy episode.
+        state, _ = env.reset(seed=seed if episode == 0 else None)  # Begin a new episode, seeding only the first reset.
+        trajectory = [state]  # Track visited states for the optional observer.
+        visited_states = []  # Keep states aligned with sampled actions and returns.
+        rewards = []  # Keep rewards until their return-to-go can be computed.
+        log_probabilities = []  # Keep differentiable log probabilities of sampled actions.
 
         while True:
-            logits = policy(one_hot(np.asarray([state]), states, device))[0]
-            distribution = torch.distributions.Categorical(logits=logits)
-            action = distribution.sample()
-            next_state, reward, terminated, truncated, _ = env.step(action.item())
-            done = terminated or truncated
-            visited_states.append(state)
-            log_probabilities.append(distribution.log_prob(action))
-            rewards.append(reward)
-            trajectory.append(next_state)
+            logits = policy(one_hot(np.asarray([state]), states, device))[0]  # Produce unnormalized action preferences for this state.
+            distribution = torch.distributions.Categorical(logits=logits)  # Turn preferences into a categorical policy.
+            action = distribution.sample()  # Sample an action from the current policy.
+            next_state, reward, terminated, truncated, _ = env.step(action.item())  # Sample the environment transition.
+            done = terminated or truncated  # Treat natural endings and time limits as episode boundaries.
+            visited_states.append(state)  # Retain the state whose action received this reward sequence.
+            log_probabilities.append(distribution.log_prob(action))  # Retain the score-function term for this action.
+            rewards.append(reward)  # Retain the reward for the later return calculation.
+            trajectory.append(next_state)  # Extend the recorded state path.
             if done:
                 break
-            state = next_state
+            state = next_state  # Continue from the sampled successor state.
 
-        returns_to_go = torch.as_tensor(discounted_returns(rewards, config.gamma), device=device)
-        baseline = value(one_hot(np.asarray(visited_states), states, device))
-        advantages = returns_to_go - baseline.detach()
-        policy_loss = -(torch.stack(log_probabilities) * advantages).sum()
-        value_loss = torch.nn.functional.mse_loss(baseline, returns_to_go)
+        returns_to_go = torch.as_tensor(discounted_returns(rewards, config.gamma), device=device)  # Compute every sampled action's discounted return-to-go.
+        baseline = value(one_hot(np.asarray(visited_states), states, device))  # Estimate V(s) for every visited state.
+        advantages = returns_to_go - baseline.detach()  # Measure returns above or below the baseline without training it through the actor.
+        policy_loss = -(torch.stack(log_probabilities) * advantages).sum()  # Increase action likelihood in proportion to estimated advantage.
+        value_loss = torch.nn.functional.mse_loss(baseline, returns_to_go)  # Train the baseline to predict sampled returns.
 
-        policy_optimizer.zero_grad()
-        policy_loss.backward()
-        policy_optimizer.step()
-        value_optimizer.zero_grad()
-        value_loss.backward()
-        value_optimizer.step()
+        policy_optimizer.zero_grad()  # Clear actor gradients from the previous episode.
+        policy_loss.backward()  # Differentiate the baseline-adjusted policy-gradient estimator.
+        policy_optimizer.step()  # Update the policy.
+        value_optimizer.zero_grad()  # Clear critic gradients from the previous episode.
+        value_loss.backward()  # Differentiate the value prediction error.
+        value_optimizer.step()  # Update the state-value baseline.
 
-        with torch.no_grad():
-            all_states = one_hot(np.arange(states), states, device)
-            probabilities = torch.softmax(policy(all_states), dim=1).cpu().numpy()
-            estimated_values = value(all_states).cpu().numpy()
-        episode_rewards[episode] = sum(rewards)
-        value_history[episode] = estimated_values
+        with torch.no_grad():  # Reporting values and probabilities does not need an autograd graph.
+            all_states = one_hot(np.arange(states), states, device)  # Encode every state for a complete policy and value snapshot.
+            probabilities = torch.softmax(policy(all_states), dim=1).cpu().numpy()  # Evaluate pi(a | s) for every state.
+            estimated_values = value(all_states).cpu().numpy()  # Evaluate V(s) for every state.
+        episode_rewards[episode] = sum(rewards)  # Store this episode's observed return.
+        value_history[episode] = estimated_values  # Store the critic's complete value snapshot.
         observer(
             TrainingSnapshot(
                 episode,

@@ -72,9 +72,14 @@ class GraphRenderer:
         x, y = self._spec["states"][state_name]["position"]
         return int(70 + x * (self._size[0] - 140)), int(70 + y * (self._size[1] - 140))
 
-    def _draw_text(self, text: str, position: tuple[int, int], font, color=(235, 235, 235)) -> None:
+    def _draw_text(self, text: str, position: tuple[int, int], font, color=(235, 235, 235), outline: tuple[int, int, int] | None = (20, 22, 28)) -> None:
         image = font.render(text, True, color)
-        self._screen.blit(image, image.get_rect(center=position))
+        rect = image.get_rect(center=position)
+        if outline is not None:
+            outline_image = font.render(text, True, outline)
+            for dx, dy in ((-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)):
+                self._screen.blit(outline_image, (rect.x + dx, rect.y + dy))
+        self._screen.blit(image, rect)
 
     def _node_color(self, state_name: str, index: int) -> tuple[int, int, int]:
         state = self._spec["states"][state_name]

@@ -1,5 +1,5 @@
 {
-  "name": "branching_risk",
+  "name": "branch_risk",
   "start_state": "start",
   "actions": {
     "a": {"label": "A", "key": "a"},

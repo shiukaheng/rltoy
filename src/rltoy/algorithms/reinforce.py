@@ -39,11 +39,11 @@ def one_hot(states: np.ndarray, state_count: int, device: torch.device) -> torch
 
 
 def discounted_returns(rewards: list[float], gamma: float) -> list[float]:
-    returns = [0.0] * len(rewards)
-    future_return = 0.0
-    for step in range(len(rewards) - 1, -1, -1):
-        future_return = rewards[step] + gamma * future_return
-        returns[step] = future_return
+    returns = [0.0] * len(rewards)  # Allocate one return-to-go for every sampled action.
+    future_return = 0.0  # The return after the terminal transition is zero.
+    for step in range(len(rewards) - 1, -1, -1):  # Work backward so each suffix return is already known.
+        future_return = rewards[step] + gamma * future_return  # Add this reward to the discounted future rewards.
+        returns[step] = future_return  # Save the return-to-go from this time step.
     return returns
 
 
@@ -60,44 +60,44 @@ def train(
         raise ValueError("REINFORCE currently requires a discrete action space")
 
     if seed is not None:
-        torch.manual_seed(seed)
-    device = torch.device(config.device)
-    states, actions = env.observation_space.n, env.action_space.n
-    policy = PolicyNetwork(states, actions, config.hidden_units).to(device)
-    optimizer = torch.optim.Adam(policy.parameters(), lr=config.learning_rate)
-    returns = np.zeros(config.episodes)
-    state_values = np.zeros((config.episodes, states))
+        torch.manual_seed(seed)  # Make policy initialization and action samples reproducible.
+    device = torch.device(config.device)  # Place policy computations on the requested device.
+    states, actions = env.observation_space.n, env.action_space.n  # Read the one-hot input and action-output dimensions.
+    policy = PolicyNetwork(states, actions, config.hidden_units).to(device)  # Create the stochastic policy being optimized.
+    optimizer = torch.optim.Adam(policy.parameters(), lr=config.learning_rate)  # Optimize the policy parameters.
+    returns = np.zeros(config.episodes)  # Reserve one observed return for each episode.
+    state_values = np.zeros((config.episodes, states))  # Store each state's largest action probability for reporting.
 
-    for episode in range(config.episodes):
-        state, _ = env.reset(seed=seed if episode == 0 else None)
-        trajectory = [state]
-        rewards = []
-        log_probabilities = []
+    for episode in range(config.episodes):  # Collect and learn from one complete policy episode.
+        state, _ = env.reset(seed=seed if episode == 0 else None)  # Begin a new episode, seeding only the first reset.
+        trajectory = [state]  # Track visited states for the optional observer.
+        rewards = []  # Keep rewards until their return-to-go can be computed.
+        log_probabilities = []  # Keep differentiable log probabilities of sampled actions.
 
         while True:
-            logits = policy(one_hot(np.asarray([state]), states, device))[0]
-            distribution = torch.distributions.Categorical(logits=logits)
-            action = distribution.sample()
-            next_state, reward, terminated, truncated, _ = env.step(action.item())
-            done = terminated or truncated
-            log_probabilities.append(distribution.log_prob(action))
-            rewards.append(reward)
-            trajectory.append(next_state)
+            logits = policy(one_hot(np.asarray([state]), states, device))[0]  # Produce unnormalized action preferences for this state.
+            distribution = torch.distributions.Categorical(logits=logits)  # Turn preferences into a categorical policy.
+            action = distribution.sample()  # Sample an action from the current policy.
+            next_state, reward, terminated, truncated, _ = env.step(action.item())  # Sample the environment transition.
+            done = terminated or truncated  # Treat natural endings and time limits as episode boundaries.
+            log_probabilities.append(distribution.log_prob(action))  # Retain the score-function term for this action.
+            rewards.append(reward)  # Retain the reward for the later return calculation.
+            trajectory.append(next_state)  # Extend the recorded state path.
             if done:
                 break
-            state = next_state
+            state = next_state  # Continue from the sampled successor state.
 
         # Vanilla REINFORCE weighs each sampled action by its full return-to-go.
-        episode_returns = torch.as_tensor(discounted_returns(rewards, config.gamma), device=device)
-        loss = -(torch.stack(log_probabilities) * episode_returns).sum()
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        episode_returns = torch.as_tensor(discounted_returns(rewards, config.gamma), device=device)  # Compute every sampled action's discounted return-to-go.
+        loss = -(torch.stack(log_probabilities) * episode_returns).sum()  # Increase log probability for actions with high returns.
+        optimizer.zero_grad()  # Clear gradients from the previous episode.
+        loss.backward()  # Differentiate the policy-gradient estimator.
+        optimizer.step()  # Update the policy after the complete episode.
 
-        with torch.no_grad():
-            probabilities = torch.softmax(policy(one_hot(np.arange(states), states, device)), dim=1).cpu().numpy()
-        returns[episode] = sum(rewards)
-        state_values[episode] = probabilities.max(axis=1)
+        with torch.no_grad():  # Reporting policy probabilities does not need an autograd graph.
+            probabilities = torch.softmax(policy(one_hot(np.arange(states), states, device)), dim=1).cpu().numpy()  # Evaluate pi(a | s) for every state.
+        returns[episode] = sum(rewards)  # Store this episode's observed return.
+        state_values[episode] = probabilities.max(axis=1)  # Report the probability of the most likely action per state.
         observer(
             TrainingSnapshot(
                 episode,
