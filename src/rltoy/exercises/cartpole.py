@@ -57,7 +57,7 @@ try:
             coeffs_pow = torch.arange(reward_array.shape[0])
             coeffs_base = torch.full(coeffs_pow.shape, fill_value=DISCOUNT_FACTOR)
             coeffs = torch.pow(coeffs_base, coeffs_pow)
-            return_ = torch.dot(reward_array.squeeze(), coeffs)
+            return_ = torch.dot(reward_array.squeeze(-1), coeffs)
             episode_loss = episode_loss + (-torch.log(action_probs[t, actions[t]]) * return_)
         episode_loss.backward()
         optimizer.step()
