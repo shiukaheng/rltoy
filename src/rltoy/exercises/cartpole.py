@@ -6,13 +6,14 @@ observation, info = env.reset()
 
 class CartPolePolicy(nn.Module):
     def __init__(self):
+        super().__init__()
         self.layers = nn.Sequential(
             nn.Linear(4,4),
             nn.ReLU(),
             nn.Linear(4,4),
             nn.ReLU(),
             nn.Linear(4,2),
-            nn.Softmax()
+            nn.Softmax(dim=-1)
         )
     def forward(self, state):
         """
