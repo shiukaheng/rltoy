@@ -15,20 +15,18 @@ def encode_state(state):
 class CartPolePolicy(nn.Module):
     def __init__(self):
         super().__init__()
-        self.layers = nn.Sequential(
-            nn.Linear(5,4),
-            nn.ReLU(),
-            nn.Linear(4,4),
-            nn.ReLU(),
-            nn.Linear(4,2),
-            nn.Softmax(dim=-1)
-        )
+        self.register_buffer("mirror_signs", torch.tensor([-1.0, -1.0, 1.0, -1.0, -1.0]))
+        self.layers = nn.Linear(5,1)
     def forward(self, state):
         """
         (5,): (pos, vel, cos_ang, sin_ang, ang_vel) ->
-        (2,): (left_logit, right_logit)
+        (2,): (left_prob, right_prob)
         """
-        return self.layers(state)
+        preference = self.layers(state).squeeze(-1)
+        mirrored_preference = self.layers(state * self.mirror_signs).squeeze(-1)
+        preference = (preference - mirrored_preference) / 2
+        logits = torch.stack((-preference, preference), dim=-1)
+        return torch.softmax(logits, dim=-1)
 
 policy = CartPolePolicy()
 policy.train()
