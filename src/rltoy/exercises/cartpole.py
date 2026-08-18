@@ -8,11 +8,15 @@ state, info = env.reset()
 
 DISCOUNT_FACTOR = 0.99
 
+def encode_state(state):
+    state = torch.from_numpy(state).float()
+    return torch.stack((state[0], state[1], torch.cos(state[2]), torch.sin(state[2]), state[3]))
+
 class CartPolePolicy(nn.Module):
     def __init__(self):
         super().__init__()
         self.layers = nn.Sequential(
-            nn.Linear(4,4),
+            nn.Linear(5,4),
             nn.ReLU(),
             nn.Linear(4,4),
             nn.ReLU(),
@@ -21,27 +25,27 @@ class CartPolePolicy(nn.Module):
         )
     def forward(self, state):
         """
-        (4,): (pos, vel, ang, ang_vel) ->
+        (5,): (pos, vel, cos_ang, sin_ang, ang_vel) ->
         (2,): (left_logit, right_logit)
         """
         return self.layers(state)
 
 policy = CartPolePolicy()
 policy.train()
-optimizer = torch.optim.Adam(policy.parameters(), lr=0.01)
+optimizer = torch.optim.Adam(policy.parameters(), lr=0.02)
 
 try:
     episode = 0
     while True:
         trajectory_buffer = []
         while True:
-            state_tensor = torch.from_numpy(state).float()
+            state_tensor = encode_state(state)
             probs = policy(state_tensor)
             action = torch.multinomial(probs, 1).item()
             state, reward, terminated, truncated, info = env.step(action)
             trajectory_buffer.append((state_tensor, probs, action, torch.tensor([reward]))) # sn, an, rnp1
             if terminated or truncated:
-                trajectory_buffer.append((torch.from_numpy(state).float(), None, None, None)) # last state without action and reward
+                trajectory_buffer.append((encode_state(state), None, None, None)) # last state without action and reward
                 break
         trajectory_buffer = list(zip(*trajectory_buffer)) # snp1
         trajectory_buffer = [[x for x in l if x is not None] for l in trajectory_buffer]
