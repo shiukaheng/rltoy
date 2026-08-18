@@ -28,8 +28,10 @@ class CartPolePolicy(nn.Module):
 
 policy = CartPolePolicy()
 policy.train()
+optimizer = torch.optim.Adam(policy.parameters(), lr=0.01)
 
 try:
+    episode = 0
     while True:
         trajectory_buffer = []
         while True:
@@ -48,13 +50,18 @@ try:
         actions = torch.tensor(trajectory_buffer[2])
         rewards = torch.stack(trajectory_buffer[3])
         print(states.shape, action_probs.shape, rewards.shape)
+        optimizer.zero_grad()
+        episode_loss = torch.tensor(0.0)
         for t in range(int(states.shape[0])-1):
             reward_array = rewards[t:]
             coeffs_pow = torch.arange(reward_array.shape[0])
             coeffs_base = torch.full(coeffs_pow.shape, fill_value=DISCOUNT_FACTOR)
             coeffs = torch.pow(coeffs_base, coeffs_pow)
             return_ = torch.dot(reward_array.squeeze(), coeffs)
-            loss = -torch.log(action_probs[t, actions[t]]) * return_
-        state, info = env.reset()
+            episode_loss = episode_loss + (-torch.log(action_probs[t, actions[t]]) * return_)
+        episode_loss.backward()
+        optimizer.step()
+        episode += 1
+        print(f"Episode {episode} return: {rewards.sum().item():.0f}")
 except KeyboardInterrupt:
     env.close()
