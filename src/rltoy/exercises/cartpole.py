@@ -51,8 +51,7 @@ try:
             coeffs_base = torch.full(coeffs_pow.shape, fill_value=DISCOUNT_FACTOR)
             coeffs = torch.pow(coeffs_base, coeffs_pow)
             return_ = torch.dot(reward_array.squeeze(), coeffs)
-            print(return_)
-            # print(reward_array)
+            loss = torch.sum(-return_ * action_probs)
         state, info = env.reset()
 except KeyboardInterrupt:
     env.close()
