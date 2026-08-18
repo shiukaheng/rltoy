@@ -1,6 +1,7 @@
 import gymnasium as gym
 import torch
 import torch.nn as nn
+import time
 
 env = gym.make("CartPole-v1", render_mode="human")
 state, info = env.reset()
@@ -28,11 +29,20 @@ policy.train()
 
 try:
     while True:
-        state_tensor = torch.from_numpy(state).float()
-        probs = policy(state_tensor)
-        action = torch.multinomial(probs, 1).item()
-        state, reward, terminated, truncated, info = env.step(action)
-        if terminated or truncated:
-            state, info = env.reset()
+        trajectory_buffer = []
+        while True:
+            state_tensor = torch.from_numpy(state).float()
+            probs = policy(state_tensor)
+            action = torch.multinomial(probs, 1).item()
+            state, reward, terminated, truncated, info = env.step(action)
+            trajectory_buffer.append((state_tensor, probs, torch.tensor([reward]))) # sn, an, rnp1
+            if terminated or truncated:
+                trajectory_buffer.append((torch.from_numpy(state).float(), None, None)) # last state without action and reward
+                break
+        trajectory_buffer = list(zip(*trajectory_buffer)) # snp1
+        trajectory_buffer = [[x for x in l if x is not None] for l in trajectory_buffer]
+        states, action_probs, rewards = [torch.stack(x) for x in trajectory_buffer]
+        print(states.shape, action_probs.shape, rewards.shape)
+        state, info = env.reset()
 except KeyboardInterrupt:
     env.close()
