@@ -46,7 +46,7 @@ try:
         states, action_probs, rewards = [torch.stack(x) for x in trajectory_buffer]
         print(states.shape, action_probs.shape, rewards.shape)
         for t in range(int(states.shape[0])-1):
-            reward_array = rewards[:t]
+            reward_array = rewards[t:]
             coeffs_pow = torch.arange(reward_array.shape[0])
             coeffs_base = torch.full(coeffs_pow.shape, fill_value=DISCOUNT_FACTOR)
             coeffs = torch.pow(coeffs_base, coeffs_pow)
