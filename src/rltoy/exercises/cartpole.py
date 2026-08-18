@@ -63,5 +63,6 @@ try:
         optimizer.step()
         episode += 1
         print(f"Episode {episode} return: {rewards.sum().item():.0f}")
+        state, info = env.reset()
 except KeyboardInterrupt:
     env.close()
