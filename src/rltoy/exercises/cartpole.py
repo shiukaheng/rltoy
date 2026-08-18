@@ -37,13 +37,16 @@ try:
             probs = policy(state_tensor)
             action = torch.multinomial(probs, 1).item()
             state, reward, terminated, truncated, info = env.step(action)
-            trajectory_buffer.append((state_tensor, probs, torch.tensor([reward]))) # sn, an, rnp1
+            trajectory_buffer.append((state_tensor, probs, action, torch.tensor([reward]))) # sn, an, rnp1
             if terminated or truncated:
-                trajectory_buffer.append((torch.from_numpy(state).float(), None, None)) # last state without action and reward
+                trajectory_buffer.append((torch.from_numpy(state).float(), None, None, None)) # last state without action and reward
                 break
         trajectory_buffer = list(zip(*trajectory_buffer)) # snp1
         trajectory_buffer = [[x for x in l if x is not None] for l in trajectory_buffer]
-        states, action_probs, rewards = [torch.stack(x) for x in trajectory_buffer]
+        states = torch.stack(trajectory_buffer[0])
+        action_probs = torch.stack(trajectory_buffer[1])
+        actions = torch.tensor(trajectory_buffer[2])
+        rewards = torch.stack(trajectory_buffer[3])
         print(states.shape, action_probs.shape, rewards.shape)
         for t in range(int(states.shape[0])-1):
             reward_array = rewards[t:]
@@ -51,7 +54,7 @@ try:
             coeffs_base = torch.full(coeffs_pow.shape, fill_value=DISCOUNT_FACTOR)
             coeffs = torch.pow(coeffs_base, coeffs_pow)
             return_ = torch.dot(reward_array.squeeze(), coeffs)
-            loss = torch.sum(-return_ * action_probs)
+            loss = -torch.log(action_probs[t, actions[t]]) * return_
         state, info = env.reset()
 except KeyboardInterrupt:
     env.close()
