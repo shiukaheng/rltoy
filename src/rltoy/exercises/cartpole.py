@@ -1,8 +1,9 @@
 import gymnasium as gym
+import torch
 import torch.nn as nn
 
 env = gym.make("CartPole-v1", render_mode="human")
-observation, info = env.reset()
+state, info = env.reset()
 
 class CartPolePolicy(nn.Module):
     def __init__(self):
@@ -22,11 +23,16 @@ class CartPolePolicy(nn.Module):
         """
         return self.layers(state)
 
+policy = CartPolePolicy()
+policy.train()
 
-for _ in range(1_000):
-    action = env.action_space.sample()  # Random policy.
-    observation, reward, terminated, truncated, info = env.step(action)
-    if terminated or truncated:
-        observation, info = env.reset()
-
-env.close()
+try:
+    while True:
+        state_tensor = torch.from_numpy(state).float()
+        probs = policy(state_tensor)
+        action = torch.multinomial(probs, 1).item()
+        state, reward, terminated, truncated, info = env.step(action)
+        if terminated or truncated:
+            state, info = env.reset()
+except KeyboardInterrupt:
+    env.close()
