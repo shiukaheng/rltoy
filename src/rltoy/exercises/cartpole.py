@@ -6,6 +6,8 @@ import time
 env = gym.make("CartPole-v1", render_mode="human")
 state, info = env.reset()
 
+DISCOUNT_FACTOR = 0.99
+
 class CartPolePolicy(nn.Module):
     def __init__(self):
         super().__init__()
@@ -43,6 +45,14 @@ try:
         trajectory_buffer = [[x for x in l if x is not None] for l in trajectory_buffer]
         states, action_probs, rewards = [torch.stack(x) for x in trajectory_buffer]
         print(states.shape, action_probs.shape, rewards.shape)
+        for t in range(int(states.shape[0])-1):
+            reward_array = rewards[:t]
+            coeffs_pow = torch.arange(reward_array.shape[0])
+            coeffs_base = torch.full(coeffs_pow.shape, fill_value=DISCOUNT_FACTOR)
+            coeffs = torch.pow(coeffs_base, coeffs_pow)
+            return_ = torch.dot(reward_array.squeeze(), coeffs)
+            print(return_)
+            # print(reward_array)
         state, info = env.reset()
 except KeyboardInterrupt:
     env.close()
