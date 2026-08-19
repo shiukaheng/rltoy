@@ -126,7 +126,7 @@ def run_episode(env, pi, policy_opt, v, value_opt, train):
         with torch.no_grad():
             baseline = v(states).squeeze(1)  # [T]
         advantage = returns - baseline
-        # advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
+        advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
 
         # --- REINFORCE loss:  -Σ_t log π(a_t | s_t) · G_t  ---
         # for each timestep t:  loss_t = -log(π(a_t|s_t)) · G_t
