@@ -37,6 +37,8 @@ def run_episode(env, policy, optimizer, train):
     selected_actions = []
     observed_rewards = []
 
+    max_tip_height = -float('inf')
+
     # iterate until environment signals termination
     while True:
 
@@ -50,8 +52,11 @@ def run_episode(env, policy, optimizer, train):
         # actually run the action and see the results
         state, reward, terminated, truncated, info = env.step(action)
 
-        # shaping reward: penalize distance below the goal height to provide denser feedback
-        reward -= TIP_DISTANCE_PENALTY * max(0.0, GOAL_HEIGHT - tip_height(state))
+        # shaping reward: penalize distance below the goal height, based on the best
+        # height achieved so far in this episode (not the current height)
+        current_height = tip_height(state)
+        max_tip_height = max(max_tip_height, current_height)
+        reward -= TIP_DISTANCE_PENALTY * max(0.0, GOAL_HEIGHT - max_tip_height)
 
         # add to trajectory
         visited_states.append(state_tensor)
