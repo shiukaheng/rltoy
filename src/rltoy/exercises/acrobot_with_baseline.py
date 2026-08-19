@@ -44,7 +44,7 @@ class AcrobotValueEstimator(nn.Module):
         pred_value = self.layers(state)
         return pred_value
 
-def run_episode(env, policy, optimizer, train):
+def run_episode(env, pi, policy_opt, v, value_opt, train):
     # collect a single episode; if train=True, run a REINFORCE update afterwards
 
     state, info = env.reset() # reset for a new episode
@@ -65,7 +65,7 @@ def run_episode(env, policy, optimizer, train):
 
         # sample policy (no gradient)
         with torch.no_grad():
-            probs = policy(state_tensor)
+            probs = pi(state_tensor)
         action = torch.multinomial(probs, 1).item()  # sample an action from the policy distribution
 
         # actually run the action and see the results
@@ -104,7 +104,7 @@ def run_episode(env, policy, optimizer, train):
         states = torch.stack(visited_states)
         actions = torch.tensor(selected_actions)
         rewards = torch.tensor(observed_rewards)
-        action_probs = policy(states)
+        action_probs = pi(states)
 
         # --- compute discounted returns G_t for each timestep ---
         # for each t:  G_t = r_t + γ·r_{t+1} + γ²·r_{t+2} + ... + γ^{T-1-t}·r_{T-1}
@@ -127,9 +127,9 @@ def run_episode(env, policy, optimizer, train):
         # total episode loss = sum of loss_t over all t
         selected_action_probs = action_probs.gather(1, actions.unsqueeze(1)).squeeze(1)
         episode_loss = -(torch.log(selected_action_probs) * returns).sum()
-        optimizer.zero_grad()
+        policy_opt.zero_grad()
         episode_loss.backward()
-        optimizer.step()
+        policy_opt.step()
 
     return episode_return # returning this is just useful for visualization. not used for training.
 
@@ -151,14 +151,14 @@ try:
         # train for 100 episodes without rendering (faster)
         env = gym.make("Acrobot-v1")
         for _ in range(100):
-            episode_return = run_episode(env, pi, policy_opt, train=True)
+            episode_return = run_episode(env, pi, policy_opt, v, value_opt, train=True)
             episode += 1
         print(f"Episode {episode} return: {episode_return:.0f}")
         env.close()
 
         # run one demo episode with rendering to visualize progress
         env = gym.make("Acrobot-v1", render_mode="human")
-        demo_return = run_episode(env, pi, policy_opt, train=False)
+        demo_return = run_episode(env, pi, policy_opt, v, value_opt, train=False)
         print(f"Demo after episode {episode} return: {demo_return:.0f}")
         env.close()
 except KeyboardInterrupt:
