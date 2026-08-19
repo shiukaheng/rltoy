@@ -51,46 +51,36 @@ def run_episode(env, pi, policy_opt, v, value_opt, train):
 
     state, info = env.reset() # reset for a new episode
 
-    # create lists for trajectory
-    visited_states = []
-    selected_actions = []
-    observed_rewards = []
-
     max_tip_height = -float('inf')
-    prev_theta2 = None
-    cumulative_spin = 0.0
 
     # iterate until environment signals termination
     while True:
 
-        state_tensor = encode_state(state) # shape [6]
+        state_n_tensor = encode_state(state) # shape [6]
 
         # sample policy (no gradient)
         with torch.no_grad():
-            probs = pi(state_tensor)  # shape [3]
+            probs = pi(state_n_tensor)  # shape [3]
         action = torch.multinomial(probs, 1).item()  # sample an action from the policy distribution
 
         # actually run the action and see the results
-        state, reward, terminated, truncated, info = env.step(action)
+        state_np1, reward, terminated, truncated, info = env.step(action)
+        state_np1_tensor = encode_state(state_np1)
 
         # shaping reward: penalize distance below the goal height, based on the best
         # height achieved so far in this episode (not the current height)
-        current_height = tip_height(state)
+        current_height = tip_height(state_np1)
         max_tip_height = max(max_tip_height, current_height)
         reward -= TIP_DISTANCE_PENALTY * max(0.0, GOAL_HEIGHT - max_tip_height)
 
-        # # penalty for second arm spinning more than one full cycle
-        # theta2 = math.atan2(state[3], state[2])
-        # if prev_theta2 is not None:
-        #     dtheta = (theta2 - prev_theta2 + math.pi) % (2 * math.pi) - math.pi
-        #     cumulative_spin += abs(dtheta)
-        # prev_theta2 = theta2
-        # reward -= SPIN_PENALTY * max(0.0, cumulative_spin - 2 * math.pi)
+        # compare predicted bootstrapped return to actual bootstrapped return
+        bootstrapped_reward = reward + DISCOUNT_FACTOR * torch.detach(v(state_np1_tensor))
+        pred_bootstrapped_reward = v(state_n_tensor)
 
-        # add to trajectory
-        visited_states.append(state_tensor)
-        selected_actions.append(action)
-        observed_rewards.append(reward)
+        value_loss = (bootstrapped_reward - pred_bootstrapped_reward) ** 2
+        value_opt.zero_grad()
+        value_loss.backward()
+        value_opt.step()
 
         # terminate if done
         if terminated or truncated:
