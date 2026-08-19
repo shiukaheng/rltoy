@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 
 DISCOUNT_FACTOR = 0.99
+CENTERING_PENALTY = 0.1
 
 
 def encode_state(state):
@@ -35,6 +36,7 @@ def run_episode(env, policy, optimizer, train):
             probs = policy(state_tensor)
         action = torch.multinomial(probs, 1).item()
         state, reward, terminated, truncated, info = env.step(action)
+        reward -= CENTERING_PENALTY * abs(state[0])
         visited_states.append(state_tensor)
         selected_actions.append(action)
         observed_rewards.append(reward)
