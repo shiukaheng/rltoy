@@ -73,8 +73,12 @@ def run_episode(env, pi, policy_opt, v, value_opt, train):
         max_tip_height = max(max_tip_height, current_height)
         reward -= TIP_DISTANCE_PENALTY * max(0.0, GOAL_HEIGHT - max_tip_height)
 
-        # compare predicted bootstrapped return to actual bootstrapped return
-        bootstrapped_reward = reward + DISCOUNT_FACTOR * torch.detach(v(state_np1_tensor))
+        # Terminal states have no future value; time-limit truncations still bootstrap.
+        with torch.no_grad():
+            if terminated:
+                bootstrapped_reward = torch.tensor(reward, dtype=state_n_tensor.dtype)
+            else:
+                bootstrapped_reward = reward + DISCOUNT_FACTOR * v(state_np1_tensor)
         pred_bootstrapped_reward = v(state_n_tensor)
 
         value_loss = (bootstrapped_reward - pred_bootstrapped_reward) ** 2
