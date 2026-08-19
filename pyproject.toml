@@ -12,6 +12,7 @@ dependencies = [
     "pyqt6>=6.11.0",
     "pyqtgraph>=0.14.0",
     "torch>=2.13.0",
+    "tqdm>=4.70.0",
     "tyro>=1.0.15",
 ]
 

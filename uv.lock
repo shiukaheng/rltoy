@@ -947,6 +947,7 @@ dependencies = [
     { name = "pyqt6" },
     { name = "pyqtgraph" },
     { name = "torch" },
+    { name = "tqdm" },
     { name = "tyro" },
 ]
 
@@ -964,6 +965,7 @@ requires-dist = [
     { name = "pyqt6", specifier = ">=6.11.0" },
     { name = "pyqtgraph", specifier = ">=0.14.0" },
     { name = "torch", specifier = ">=2.13.0" },
+    { name = "tqdm", specifier = ">=4.70.0" },
     { name = "tyro", specifier = ">=1.0.15" },
 ]
 

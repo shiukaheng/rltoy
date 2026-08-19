@@ -3,6 +3,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.functional as F
+from tqdm import trange
 
 DISCOUNT_FACTOR = 0.99  # how much future rewards are worth relative to immediate ones
 GOAL_HEIGHT = 1.0
@@ -46,17 +47,17 @@ class AcrobotValueEstimator(nn.Module):
         pred_value = self.layers(state)
         return pred_value
 
-def run_episode(env, pi, policy_opt, v, value_opt, train):
-    # collect a single episode; if train=True, run a REINFORCE update afterwards
+def run_episode(env, pi, policy_opt, v, value_opt):
+    # Collect and update from a single episode.
 
-    state, info = env.reset() # reset for a new episode
+    state_n, info = env.reset() # reset for a new episode
 
     max_tip_height = -float('inf')
 
     # iterate until environment signals termination
     while True:
 
-        state_n_tensor = encode_state(state) # shape [6]
+        state_n_tensor = encode_state(state_n) # shape [6]
 
         # sample policy (no gradient)
         with torch.no_grad():
@@ -73,74 +74,36 @@ def run_episode(env, pi, policy_opt, v, value_opt, train):
         max_tip_height = max(max_tip_height, current_height)
         reward -= TIP_DISTANCE_PENALTY * max(0.0, GOAL_HEIGHT - max_tip_height)
 
-        # Terminal states have no future value; time-limit truncations still bootstrap.
+        # calculate the bootstrapped reward
+        # terminal states have no future value; time-limit truncations still bootstrap.
         with torch.no_grad():
             if terminated:
                 bootstrapped_reward = torch.tensor(reward, dtype=state_n_tensor.dtype)
             else:
                 bootstrapped_reward = reward + DISCOUNT_FACTOR * v(state_np1_tensor)
+
+        # trained our bootstrapped reward predictor (for baseline / advantage estimation)
         pred_bootstrapped_reward = v(state_n_tensor)
 
+        # calculate loss for our policy
+        advantage = bootstrapped_reward - torch.detach(v(state_n_tensor))
+        action_log_prob = torch.log(pi(state_n_tensor)[action])
+        policy_loss = -advantage * action_log_prob
+        policy_opt.zero_grad()
+        policy_loss.backward()
+        policy_opt.step()
+
+        # calculate loss for our value estimator network
         value_loss = (bootstrapped_reward - pred_bootstrapped_reward) ** 2
         value_opt.zero_grad()
         value_loss.backward()
         value_opt.step()
 
+        state_n = state_np1
+
         # terminate if done
         if terminated or truncated:
             break
-
-    
-    episode_return = sum(observed_rewards)
-
-    if train:
-        # --- REINFORCE update ---
-
-        # vectorizing the data required for training: states, actions, rewards
-        states = torch.stack(visited_states)  # shape [T, 6]
-        actions = torch.tensor(selected_actions)  # shape [T]
-        rewards = torch.tensor(observed_rewards)  # shape [T]
-        action_probs = pi(states)  # shape [T, 3]
-
-        # --- compute discounted returns G_t for each timestep ---
-        # for each t:  G_t = r_t + γ·r_{t+1} + γ²·r_{t+2} + ... + γ^{T-1-t}·r_{T-1}
-        #
-        # vectorized trick:  multiply every r_t by γ^t, then a reverse cumsum
-        # sums from the end, and finally divide by γ^t to undo the premultiplication.
-        #
-        #   discounted_rewards = [γ⁰·r₀,  γ¹·r₁,  γ²·r₂,  ...,  γ^{T-1}·r_{T-1}]
-        #   reverse → cumsum → reverse → divide elementwise by discounts
-        #   → [G₀, G₁, G₂, ..., G_{T-1}]
-        discounts = DISCOUNT_FACTOR ** torch.arange(rewards.shape[0], dtype=torch.float32)  # [T]
-        discounted_rewards = rewards * discounts  # [T]
-        returns = torch.flip(
-            torch.cumsum(torch.flip(discounted_rewards, dims=(0,)), dim=0),
-            dims=(0,),
-        ) / discounts  # returns: [T]
-        with torch.no_grad():
-            baseline = v(states).squeeze(1)  # [T]
-        advantage = returns - baseline
-        advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
-
-        # --- REINFORCE loss:  -Σ_t log π(a_t | s_t) · G_t  ---
-        # for each timestep t:  loss_t = -log(π(a_t|s_t)) · G_t
-        # total episode loss = sum of loss_t over all t
-        selected_action_probs = action_probs.gather(1, actions.unsqueeze(1)).squeeze(1)  # [T]
-        policy_loss = -(torch.log(selected_action_probs) * advantage).sum()  # scalar
-        policy_opt.zero_grad()
-        policy_loss.backward()
-        policy_opt.step()
-
-        # --- Value Function loss ---
-        pred_values = v(states).squeeze(1)  # [T]
-        value_loss = torch.mean((returns - pred_values) ** 2)
-        value_opt.zero_grad()
-        value_loss.backward()
-        value_opt.step()
-
-
-    return episode_return # returning this is just useful for visualization. not used for training.
-
 
 # instantiate policy and optimizer
 pi = AcrobotPolicy(3)  # 3 actions: left, right, no-torque
@@ -158,16 +121,16 @@ try:
     while True:
         # train for 100 episodes without rendering (faster)
         env = gym.make("Acrobot-v1")
-        for _ in range(100):
-            episode_return = run_episode(env, pi, policy_opt, v, value_opt, train=True)
+        for _ in trange(100, desc="Training", leave=False):
+            run_episode(env, pi, policy_opt, v, value_opt)
             episode += 1
-        print(f"Episode {episode} return: {episode_return:.0f}")
+        print(f"Completed episode {episode}")
         env.close()
 
         # run one demo episode with rendering to visualize progress
         env = gym.make("Acrobot-v1", render_mode="human")
-        demo_return = run_episode(env, pi, policy_opt, v, value_opt, train=False)
-        print(f"Demo after episode {episode} return: {demo_return:.0f}")
+        run_episode(env, pi, policy_opt, v, value_opt)
+        print(f"Demo after episode {episode}")
         env.close()
 except KeyboardInterrupt:
     if env is not None:
