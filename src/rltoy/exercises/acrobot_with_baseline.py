@@ -17,7 +17,7 @@ def tip_height(state):
 
 
 def encode_state(state):
-    return torch.from_numpy(state).float()  # gymnasium state is a numpy array; convert to tensor
+    return torch.from_numpy(state).float()  # gymnasium state -> float tensor, shape [state_dim=6]
 
 
 class AcrobotPolicy(nn.Module):
@@ -26,8 +26,9 @@ class AcrobotPolicy(nn.Module):
         self.layers = nn.Linear(6, n_actions)  # 6-dimensional state -> action logits
 
     def forward(self, state):
+        # state: [6] or [batch, 6]; logits and probabilities: [3] or [batch, 3]
         logits = self.layers(state)
-        return torch.softmax(logits, dim=-1)  # outputs a probability distribution over actions
+        return torch.softmax(logits, dim=-1)  # normalize over the final action dimension
 
 class AcrobotValueEstimator(nn.Module):
     def __init__(self):
@@ -41,6 +42,7 @@ class AcrobotValueEstimator(nn.Module):
         )
 
     def forward(self, state):
+        # state: [6] or [batch, 6]; pred_value: [1] or [batch, 1]
         pred_value = self.layers(state)
         return pred_value
 
@@ -61,11 +63,11 @@ def run_episode(env, pi, policy_opt, v, value_opt, train):
     # iterate until environment signals termination
     while True:
 
-        state_tensor = encode_state(state) # turn gymnasium state into tensor
+        state_tensor = encode_state(state) # shape [6]
 
         # sample policy (no gradient)
         with torch.no_grad():
-            probs = pi(state_tensor)
+            probs = pi(state_tensor)  # shape [3]
         action = torch.multinomial(probs, 1).item()  # sample an action from the policy distribution
 
         # actually run the action and see the results
@@ -101,10 +103,10 @@ def run_episode(env, pi, policy_opt, v, value_opt, train):
         # --- REINFORCE update ---
 
         # vectorizing the data required for training: states, actions, rewards
-        states = torch.stack(visited_states)
-        actions = torch.tensor(selected_actions)
-        rewards = torch.tensor(observed_rewards)
-        action_probs = pi(states)
+        states = torch.stack(visited_states)  # shape [T, 6]
+        actions = torch.tensor(selected_actions)  # shape [T]
+        rewards = torch.tensor(observed_rewards)  # shape [T]
+        action_probs = pi(states)  # shape [T, 3]
 
         # --- compute discounted returns G_t for each timestep ---
         # for each t:  G_t = r_t + γ·r_{t+1} + γ²·r_{t+2} + ... + γ^{T-1-t}·r_{T-1}
@@ -115,21 +117,29 @@ def run_episode(env, pi, policy_opt, v, value_opt, train):
         #   discounted_rewards = [γ⁰·r₀,  γ¹·r₁,  γ²·r₂,  ...,  γ^{T-1}·r_{T-1}]
         #   reverse → cumsum → reverse → divide elementwise by discounts
         #   → [G₀, G₁, G₂, ..., G_{T-1}]
-        discounts = DISCOUNT_FACTOR ** torch.arange(rewards.shape[0], dtype=torch.float32)
-        discounted_rewards = rewards * discounts
+        discounts = DISCOUNT_FACTOR ** torch.arange(rewards.shape[0], dtype=torch.float32)  # [T]
+        discounted_rewards = rewards * discounts  # [T]
         returns = torch.flip(
             torch.cumsum(torch.flip(discounted_rewards, dims=(0,)), dim=0),
             dims=(0,),
-        ) / discounts
+        ) / discounts  # returns: [T]
 
         # --- REINFORCE loss:  -Σ_t log π(a_t | s_t) · G_t  ---
         # for each timestep t:  loss_t = -log(π(a_t|s_t)) · G_t
         # total episode loss = sum of loss_t over all t
-        selected_action_probs = action_probs.gather(1, actions.unsqueeze(1)).squeeze(1)
-        episode_loss = -(torch.log(selected_action_probs) * returns).sum()
+        selected_action_probs = action_probs.gather(1, actions.unsqueeze(1)).squeeze(1)  # [T]
+        policy_loss = -(torch.log(selected_action_probs) * returns).sum()  # scalar
         policy_opt.zero_grad()
-        episode_loss.backward()
+        policy_loss.backward()
         policy_opt.step()
+
+        # --- Value Function loss ---
+        pred_values = v(states) # [T]
+        value_loss = torch.sum((returns - pred_values) ** 2)
+        value_opt.zero_grad()
+        value_loss.backward()
+        value_opt.step()
+
 
     return episode_return # returning this is just useful for visualization. not used for training.
 
