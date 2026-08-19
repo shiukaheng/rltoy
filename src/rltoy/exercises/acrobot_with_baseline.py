@@ -79,13 +79,13 @@ def run_episode(env, pi, policy_opt, v, value_opt, train):
         max_tip_height = max(max_tip_height, current_height)
         reward -= TIP_DISTANCE_PENALTY * max(0.0, GOAL_HEIGHT - max_tip_height)
 
-        # penalty for second arm spinning more than one full cycle
-        theta2 = math.atan2(state[3], state[2])
-        if prev_theta2 is not None:
-            dtheta = (theta2 - prev_theta2 + math.pi) % (2 * math.pi) - math.pi
-            cumulative_spin += abs(dtheta)
-        prev_theta2 = theta2
-        reward -= SPIN_PENALTY * max(0.0, cumulative_spin - 2 * math.pi)
+        # # penalty for second arm spinning more than one full cycle
+        # theta2 = math.atan2(state[3], state[2])
+        # if prev_theta2 is not None:
+        #     dtheta = (theta2 - prev_theta2 + math.pi) % (2 * math.pi) - math.pi
+        #     cumulative_spin += abs(dtheta)
+        # prev_theta2 = theta2
+        # reward -= SPIN_PENALTY * max(0.0, cumulative_spin - 2 * math.pi)
 
         # add to trajectory
         visited_states.append(state_tensor)
@@ -123,19 +123,23 @@ def run_episode(env, pi, policy_opt, v, value_opt, train):
             torch.cumsum(torch.flip(discounted_rewards, dims=(0,)), dim=0),
             dims=(0,),
         ) / discounts  # returns: [T]
+        with torch.no_grad():
+            baseline = v(states).squeeze(1)  # [T]
+        advantage = returns - baseline
+        # advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
 
         # --- REINFORCE loss:  -Σ_t log π(a_t | s_t) · G_t  ---
         # for each timestep t:  loss_t = -log(π(a_t|s_t)) · G_t
         # total episode loss = sum of loss_t over all t
         selected_action_probs = action_probs.gather(1, actions.unsqueeze(1)).squeeze(1)  # [T]
-        policy_loss = -(torch.log(selected_action_probs) * returns).sum()  # scalar
+        policy_loss = -(torch.log(selected_action_probs) * advantage).sum()  # scalar
         policy_opt.zero_grad()
         policy_loss.backward()
         policy_opt.step()
 
         # --- Value Function loss ---
-        pred_values = v(states) # [T]
-        value_loss = torch.sum((returns - pred_values) ** 2)
+        pred_values = v(states).squeeze(1)  # [T]
+        value_loss = torch.mean((returns - pred_values) ** 2)
         value_opt.zero_grad()
         value_loss.backward()
         value_opt.step()
@@ -151,7 +155,7 @@ policy_opt = torch.optim.Adam(pi.parameters(), lr=0.02)
 
 v = AcrobotValueEstimator()
 v.train()
-value_opt = torch.optim.Adam(pi.parameters(), lr=0.02)
+value_opt = torch.optim.Adam(v.parameters(), lr=1e-3)
 
 episode = 0
 env = None
