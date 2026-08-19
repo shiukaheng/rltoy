@@ -1,10 +1,12 @@
 import gymnasium as gym
+import math
 import torch
 import torch.nn as nn
 
 DISCOUNT_FACTOR = 0.99  # how much future rewards are worth relative to immediate ones
 GOAL_HEIGHT = 1.0
 TIP_DISTANCE_PENALTY = 0.1  # reward shaping: penalize being far below the goal line
+SPIN_PENALTY = 0.05  # reward shaping: penalize second arm spinning more than one full cycle
 
 
 def tip_height(state):
@@ -38,6 +40,8 @@ def run_episode(env, policy, optimizer, train):
     observed_rewards = []
 
     max_tip_height = -float('inf')
+    prev_theta2 = None
+    cumulative_spin = 0.0
 
     # iterate until environment signals termination
     while True:
@@ -57,6 +61,14 @@ def run_episode(env, policy, optimizer, train):
         current_height = tip_height(state)
         max_tip_height = max(max_tip_height, current_height)
         reward -= TIP_DISTANCE_PENALTY * max(0.0, GOAL_HEIGHT - max_tip_height)
+
+        # penalty for second arm spinning more than one full cycle
+        theta2 = math.atan2(state[3], state[2])
+        if prev_theta2 is not None:
+            dtheta = (theta2 - prev_theta2 + math.pi) % (2 * math.pi) - math.pi
+            cumulative_spin += abs(dtheta)
+        prev_theta2 = theta2
+        reward -= SPIN_PENALTY * max(0.0, cumulative_spin - 2 * math.pi)
 
         # add to trajectory
         visited_states.append(state_tensor)
