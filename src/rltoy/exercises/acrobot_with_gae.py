@@ -1,169 +1,284 @@
 import gymnasium as gym
-import math
 import torch
 import torch.nn as nn
-import torch.functional as F
 
-DISCOUNT_FACTOR = 0.99  # how much future rewards are worth relative to immediate ones
+DISCOUNT_FACTOR = 0.99
+GAE_LAMBDA = 0.95
+
 GOAL_HEIGHT = 1.0
-TIP_DISTANCE_PENALTY = 0.1  # reward shaping: penalize being far below the goal line
-SPIN_PENALTY = 0.05  # reward shaping: penalize second arm spinning more than one full cycle
+TIP_DISTANCE_PENALTY = 0.1
+SPIN_PENALTY = 0.05
 
 
 def tip_height(state):
     cos1, sin1, cos2, sin2 = state[0], state[1], state[2], state[3]
-    # height of the tip relative to the top pivot, using the two-link kinematics
     return -cos1 - (cos1 * cos2 - sin1 * sin2)
 
 
 def encode_state(state):
-    return torch.from_numpy(state).float()  # gymnasium state -> float tensor, shape [state_dim=6]
+    return torch.from_numpy(state).float()
 
 
 class AcrobotPolicy(nn.Module):
     def __init__(self, n_actions):
         super().__init__()
-        self.layers = nn.Linear(6, n_actions)  # 6-dimensional state -> action logits
+        self.layers = nn.Linear(6, n_actions)
 
     def forward(self, state):
-        # state: [6] or [batch, 6]; logits and probabilities: [3] or [batch, 3]
         logits = self.layers(state)
-        return torch.softmax(logits, dim=-1)  # normalize over the final action dimension
+        return torch.softmax(logits, dim=-1)
+
 
 class AcrobotValueEstimator(nn.Module):
     def __init__(self):
         super().__init__()
         self.layers = nn.Sequential(
-            nn.Linear(6,32),
+            nn.Linear(6, 32),
             nn.ReLU(),
-            nn.Linear(32,32),
+            nn.Linear(32, 32),
             nn.ReLU(),
-            nn.Linear(32,1)
+            nn.Linear(32, 1),
         )
 
     def forward(self, state):
-        # state: [6] or [batch, 6]; pred_value: [1] or [batch, 1]
-        pred_value = self.layers(state)
-        return pred_value
+        return self.layers(state)
+
 
 def run_episode(env, pi, policy_opt, v, value_opt, train):
-    # collect a single episode; if train=True, run a REINFORCE update afterwards
+    state, info = env.reset()
 
-    state, info = env.reset() # reset for a new episode
-
-    # create lists for trajectory
     visited_states = []
     selected_actions = []
     observed_rewards = []
 
-    max_tip_height = -float('inf')
-    
-    # iterate until environment signals termination
+    max_tip_height = -float("inf")
+
     while True:
+        state_tensor = encode_state(state)
 
-        state_tensor = encode_state(state) # shape [6]
-
-        # sample policy (no gradient)
+        # Sample action without building a gradient graph.
         with torch.no_grad():
-            probs = pi(state_tensor)  # shape [3]
-        action = torch.multinomial(probs, 1).item()  # sample an action from the policy distribution
+            probs = pi(state_tensor)
 
-        # actually run the action and see the results
-        state, reward, terminated, truncated, info = env.step(action)
+        action = torch.multinomial(probs, 1).item()
 
-        # shaping reward: penalize distance below the goal height, based on the best
-        # height achieved so far in this episode (not the current height)
-        current_height = tip_height(state)
+        next_state, reward, terminated, truncated, info = env.step(action)
+
+        # Reward shaping.
+        current_height = tip_height(next_state)
         max_tip_height = max(max_tip_height, current_height)
-        reward -= TIP_DISTANCE_PENALTY * max(0.0, GOAL_HEIGHT - max_tip_height)
 
-        # add to trajectory
+        reward -= TIP_DISTANCE_PENALTY * max(
+            0.0,
+            GOAL_HEIGHT - max_tip_height,
+        )
+
+        # Store transition information.
         visited_states.append(state_tensor)
         selected_actions.append(action)
         observed_rewards.append(reward)
 
-        # terminate if done
+        state = next_state
+
         if terminated or truncated:
             break
 
     episode_return = sum(observed_rewards)
 
     if train:
-        # --- REINFORCE update ---
+        # ------------------------------------------------------------
+        # Convert trajectory to tensors
+        # ------------------------------------------------------------
 
-        # vectorizing the data required for training: states, actions, rewards
-        states = torch.stack(visited_states)  # shape [T, 6]
-        actions = torch.tensor(selected_actions)  # shape [T]
-        rewards = torch.tensor(observed_rewards)  # shape [T]
-        action_probs = pi(states)  # shape [T, 3]
+        states = torch.stack(visited_states)                  # [T, 6]
+        actions = torch.tensor(selected_actions)             # [T]
+        rewards = torch.tensor(observed_rewards).float()     # [T]
 
-        # --- compute discounted returns G_t for each timestep ---
-        # for each t:  G_t = r_t + γ·r_{t+1} + γ²·r_{t+2} + ... + γ^{T-1-t}·r_{T-1}
+        T = len(rewards)
+
+        # ------------------------------------------------------------
+        # Compute GAE
         #
-        # vectorized trick:  multiply every r_t by γ^t, then a reverse cumsum
-        # sums from the end, and finally divide by γ^t to undo the premultiplication.
+        # δ_t = r_t + γ V(s_{t+1}) - V(s_t)
         #
-        #   discounted_rewards = [γ⁰·r₀,  γ¹·r₁,  γ²·r₂,  ...,  γ^{T-1}·r_{T-1}]
-        #   reverse → cumsum → reverse → divide elementwise by discounts
-        #   → [G₀, G₁, G₂, ..., G_{T-1}]
-        discounts = DISCOUNT_FACTOR ** torch.arange(rewards.shape[0], dtype=torch.float32)  # [T]
-        discounted_rewards = rewards * discounts  # [T]
-        returns = torch.flip(
-            torch.cumsum(torch.flip(discounted_rewards, dims=(0,)), dim=0),
-            dims=(0,),
-        ) / discounts  # returns: [T]
+        # A_t^GAE = δ_t + γ λ A_{t+1}^GAE
+        # ------------------------------------------------------------
+
         with torch.no_grad():
-            baseline = v(states).squeeze(1)  # [T]
-        advantage = returns - baseline
-        advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
+            values = v(states).squeeze(1)  # [T]
 
-        # --- REINFORCE loss:  -Σ_t log π(a_t | s_t) · G_t  ---
-        # for each timestep t:  loss_t = -log(π(a_t|s_t)) · G_t
-        # total episode loss = sum of loss_t over all t
-        selected_action_probs = action_probs.gather(1, actions.unsqueeze(1)).squeeze(1)  # [T]
-        policy_loss = -(torch.log(selected_action_probs) * advantage).sum()  # scalar
+            # The variable `state` is now the state after the final
+            # transition, i.e. s_T.
+            #
+            # A genuinely terminated episode has V(s_T) = 0.
+            # A time-limit truncation still bootstraps from V(s_T).
+            if terminated:
+                final_next_value = torch.tensor(0.0)
+            else:
+                final_next_value = v(encode_state(state)).squeeze()
+
+            advantages = torch.zeros_like(rewards)
+
+            gae = torch.tensor(0.0)
+
+            # Work backwards through the trajectory.
+            for t in reversed(range(T)):
+
+                # For all non-final steps:
+                #
+                #     s_{t+1} = states[t + 1]
+                #
+                # so its value is values[t + 1].
+                #
+                # For the final step, use the separately evaluated s_T.
+                if t == T - 1:
+                    next_value = final_next_value
+                else:
+                    next_value = values[t + 1]
+
+                delta = (
+                    rewards[t]
+                    + DISCOUNT_FACTOR * next_value
+                    - values[t]
+                )
+
+                gae = (
+                    delta
+                    + DISCOUNT_FACTOR
+                    * GAE_LAMBDA
+                    * gae
+                )
+
+                advantages[t] = gae
+
+            # Since
+            #
+            #     advantage ≈ target - V(s_t)
+            #
+            # we can reconstruct a target for the critic:
+            #
+            #     target = V(s_t) + advantage
+            #
+            value_targets = values + advantages
+
+        # ------------------------------------------------------------
+        # Policy update
+        # ------------------------------------------------------------
+
+        # Advantage normalization is optional but commonly useful.
+        advantages_for_policy = (
+            advantages - advantages.mean()
+        ) / (
+            advantages.std() + 1e-8
+        )
+
+        action_probs = pi(states)  # [T, 3]
+
+        selected_action_probs = action_probs.gather(
+            1,
+            actions.unsqueeze(1),
+        ).squeeze(1)
+
+        log_probs = torch.log(selected_action_probs)
+
+        policy_loss = -(
+            log_probs * advantages_for_policy
+        ).mean()
+
         policy_opt.zero_grad()
         policy_loss.backward()
         policy_opt.step()
 
-        # --- Value Function loss ---
-        pred_values = v(states).squeeze(1)  # [T]
-        value_loss = torch.mean((returns - pred_values) ** 2)
+        # ------------------------------------------------------------
+        # Value function update
+        # ------------------------------------------------------------
+
+        pred_values = v(states).squeeze(1)
+
+        value_loss = torch.mean(
+            (pred_values - value_targets) ** 2
+        )
+
         value_opt.zero_grad()
         value_loss.backward()
         value_opt.step()
 
+    return episode_return
 
-    return episode_return # returning this is just useful for visualization. not used for training.
 
+# ------------------------------------------------------------
+# Instantiate policy and value function
+# ------------------------------------------------------------
 
-# instantiate policy and optimizer
-pi = AcrobotPolicy(3)  # 3 actions: left, right, no-torque
+pi = AcrobotPolicy(3)
 pi.train()
-policy_opt = torch.optim.Adam(pi.parameters(), lr=0.02)
+
+policy_opt = torch.optim.Adam(
+    pi.parameters(),
+    lr=0.02,
+)
 
 v = AcrobotValueEstimator()
 v.train()
-value_opt = torch.optim.Adam(v.parameters(), lr=1e-3)
+
+value_opt = torch.optim.Adam(
+    v.parameters(),
+    lr=1e-3,
+)
+
+
+# ------------------------------------------------------------
+# Training loop
+# ------------------------------------------------------------
 
 episode = 0
 env = None
 
 try:
     while True:
-        # train for 100 episodes without rendering (faster)
         env = gym.make("Acrobot-v1")
+
         for _ in range(100):
-            episode_return = run_episode(env, pi, policy_opt, v, value_opt, train=True)
+            episode_return = run_episode(
+                env,
+                pi,
+                policy_opt,
+                v,
+                value_opt,
+                train=True,
+            )
+
             episode += 1
-        print(f"Episode {episode} return: {episode_return:.0f}")
+
+        print(
+            f"Episode {episode} return: "
+            f"{episode_return:.0f}"
+        )
+
         env.close()
 
-        # run one demo episode with rendering to visualize progress
-        env = gym.make("Acrobot-v1", render_mode="human")
-        demo_return = run_episode(env, pi, policy_opt, v, value_opt, train=False)
-        print(f"Demo after episode {episode} return: {demo_return:.0f}")
+        # Demo episode.
+        env = gym.make(
+            "Acrobot-v1",
+            render_mode="human",
+        )
+
+        demo_return = run_episode(
+            env,
+            pi,
+            policy_opt,
+            v,
+            value_opt,
+            train=False,
+        )
+
+        print(
+            f"Demo after episode {episode} "
+            f"return: {demo_return:.0f}"
+        )
+
         env.close()
+
 except KeyboardInterrupt:
     if env is not None:
         env.close()
